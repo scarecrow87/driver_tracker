@@ -1,0 +1,52 @@
+// Prisma schema for Driver Tracker
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  DRIVER
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  role         Role      @default(DRIVER)
+  password     String
+  adminPhone   String?   // Phone number for SMS alerts (admins)
+  adminEmail   String?   // Email for alert notifications (admins)
+  checkIns     CheckIn[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Location {
+  id        String    @id @default(cuid())
+  name      String
+  address   String?
+  checkIns  CheckIn[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model CheckIn {
+  id           String    @id @default(cuid())
+  driver       User      @relation(fields: [driverId], references: [id])
+  driverId     String
+  location     Location  @relation(fields: [locationId], references: [id])
+  locationId   String
+  checkInTime  DateTime  @default(now())
+  checkOutTime DateTime?
+  latitude     Float?
+  longitude    Float?
+  alertSent    Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
