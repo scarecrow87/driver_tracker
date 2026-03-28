@@ -27,15 +27,9 @@ A driver safety tracking Progressive Web App (PWA) built with Next.js, TypeScrip
    docker-compose up -d
    ```
 
-   The app container automatically applies any pending database migrations on startup.
+   The app container automatically applies any pending database migrations and seeds the default users and locations on startup.
 
-3. **Seed initial data** (admin + driver user, sample locations)
-
-   ```bash
-   docker exec -it driver_tracker_app npx ts-node --compiler-options '{"module":"CommonJS"}' prisma/seed.ts
-   ```
-
-4. **Open the app**
+3. **Open the app**
 
    Visit [http://localhost:3000](http://localhost:3000)
 
