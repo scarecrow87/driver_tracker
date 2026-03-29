@@ -30,6 +30,7 @@ A driver safety tracking Progressive Web App (PWA) built with Next.js, TypeScrip
    ```
 
    The app container automatically applies any pending database migrations on startup.
+   Startup runs `prisma migrate deploy` with retry logic (configurable via `MIGRATION_MAX_RETRIES` and `MIGRATION_RETRY_DELAY_SECONDS`).
 
 3. **Seed initial data** (superuser + admin + driver users, sample locations)
 
@@ -117,14 +118,11 @@ If you are using Docker, the container startup script applies pending migrations
 | `DATABASE_URL` | PostgreSQL connection string |
 | `NEXTAUTH_SECRET` | Secret for JWT signing |
 | `NEXTAUTH_URL` | App base URL |
-| `EMAIL_TENANT_ID` | Microsoft Azure AD tenant ID |
-| `EMAIL_CLIENT_ID` | Microsoft Azure AD app client ID |
-| `EMAIL_CLIENT_SECRET` | Microsoft Azure AD app client secret |
-| `EMAIL_FROM` | Sender email address (must be a licensed M365 mailbox) |
-| `TWILIO_ACCOUNT_SID` | Twilio account SID |
-| `TWILIO_AUTH_TOKEN` | Twilio auth token |
-| `TWILIO_FROM_NUMBER` | Twilio phone number (E.164 format) |
 | `SETTINGS_ENCRYPTION_KEY` | 32-byte key (raw or base64) used to encrypt notification provider secrets stored in DB |
+| `MIGRATION_MAX_RETRIES` | Optional Docker startup retry count for `prisma migrate deploy` (default `10`) |
+| `MIGRATION_RETRY_DELAY_SECONDS` | Optional wait between migration retries in seconds (default `5`) |
+
+Optional fallback provider env vars (used only if superuser DB settings are empty): `EMAIL_TENANT_ID`, `EMAIL_CLIENT_ID`, `EMAIL_CLIENT_SECRET`, `EMAIL_FROM`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`.
 
 ## Architecture
 
