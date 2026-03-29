@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions, isAdminOrSuperuser, isSuperuser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
@@ -9,14 +9,11 @@ const updateUserSchema = z.object({
   email: z.string().email().optional(),
   name: z.string().min(1).optional(),
   password: z.string().min(6).optional(),
-  role: z.enum(['ADMIN', 'DRIVER']).optional(),
+  role: z.enum(['ADMIN', 'DRIVER', 'SUPERUSER']).optional(),
+  isActive: z.boolean().optional(),
   adminPhone: z.string().optional(),
   adminEmail: z.string().email().optional(),
 });
-
-function isAdmin(session: any) {
-  return session?.user?.role === 'ADMIN';
-}
 
 // PUT /api/admin/users/[id]
 export async function PUT(
@@ -24,7 +21,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   const session = await getServerSession(authOptions);
-  if (!isAdmin(session)) {
+  if (!isAdminOrSuperuser(session)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -34,7 +31,29 @@ export async function PUT(
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const data: any = { ...parsed.data };
+  const existingUser = await prisma.user.findUnique({
+    where: { id: params.id },
+    select: { id: true, role: true },
+  });
+  if (!existingUser) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  }
+
+  if (existingUser.role === 'SUPERUSER' && !isSuperuser(session)) {
+    return NextResponse.json(
+      { error: 'Only superusers can edit superusers' },
+      { status: 403 }
+    );
+  }
+
+  if (parsed.data.role === 'SUPERUSER' && !isSuperuser(session)) {
+    return NextResponse.json(
+      { error: 'Only superusers can assign superuser role' },
+      { status: 403 }
+    );
+  }
+
+  const data: z.infer<typeof updateUserSchema> & { password?: string } = { ...parsed.data };
   if (data.password) {
     data.password = await bcrypt.hash(data.password, 10);
   }
@@ -48,6 +67,7 @@ export async function PUT(
         email: true,
         name: true,
         role: true,
+        isActive: true,
         adminPhone: true,
         adminEmail: true,
         createdAt: true,
@@ -65,8 +85,23 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   const session = await getServerSession(authOptions);
-  if (!isAdmin(session)) {
+  if (!isAdminOrSuperuser(session)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { id: params.id },
+    select: { id: true, role: true },
+  });
+  if (!existingUser) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  }
+
+  if (existingUser.role === 'SUPERUSER' && !isSuperuser(session)) {
+    return NextResponse.json(
+      { error: 'Only superusers can delete superusers' },
+      { status: 403 }
+    );
   }
 
   try {

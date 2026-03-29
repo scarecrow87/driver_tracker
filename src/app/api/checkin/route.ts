@@ -17,6 +17,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const activeDriver = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { isActive: true },
+  });
+  if (!activeDriver?.isActive) {
+    return NextResponse.json({ error: 'Driver account is inactive' }, { status: 403 });
+  }
+
   // Check for existing open check-in
   const existing = await prisma.checkIn.findFirst({
     where: {
@@ -37,6 +45,17 @@ export async function POST(req: NextRequest) {
   const parsed = checkInSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const location = await prisma.location.findUnique({
+    where: { id: parsed.data.locationId },
+    select: { id: true, isActive: true },
+  });
+  if (!location) {
+    return NextResponse.json({ error: 'Location not found' }, { status: 404 });
+  }
+  if (!location.isActive) {
+    return NextResponse.json({ error: 'Selected location is inactive' }, { status: 400 });
   }
 
   const checkIn = await prisma.checkIn.create({

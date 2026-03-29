@@ -2,11 +2,13 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 
 interface Location {
   id: string;
   name: string;
   address?: string;
+  isActive: boolean;
 }
 
 interface User {
@@ -14,6 +16,7 @@ interface User {
   email: string;
   name: string;
   role: string;
+  isActive: boolean;
   adminPhone?: string;
   adminEmail?: string;
 }
@@ -30,6 +33,28 @@ interface CheckIn {
   driver?: { id: string; name: string; email: string };
 }
 
+interface MapPoint {
+  id: string;
+  driverName: string;
+  locationName?: string;
+  latitude: number;
+  longitude: number;
+  checkInTime: string;
+  checkOutTime?: string;
+}
+
+interface NotificationSettings {
+  emailTenantId: string;
+  emailClientId: string;
+  emailClientSecret: string;
+  emailFrom: string;
+  twilioAccountSid: string;
+  twilioAuthToken: string;
+  twilioFromNumber: string;
+  hasEmailClientSecret: boolean;
+  hasTwilioAuthToken: boolean;
+}
+
 interface Stats {
   totalDrivers: number;
   totalLocations: number;
@@ -37,18 +62,21 @@ interface Stats {
   totalCheckIns: number;
 }
 
-type ActiveTab = 'overview' | 'locations' | 'users';
+type ActiveTab = 'overview' | 'locations' | 'users' | 'map' | 'settings';
+
+const DriverMap = dynamic(() => import('@/components/DriverMap'), { ssr: false });
 
 export default function AdminDashboard() {
   const { data: session } = useSession();
   const [tab, setTab] = useState<ActiveTab>('overview');
   const [stats, setStats] = useState<Stats | null>(null);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [latestLocations, setLatestLocations] = useState<MapPoint[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [users, setUsers] = useState<User[]>([]);
 
   // Location form state
-  const [locationForm, setLocationForm] = useState({ name: '', address: '' });
+  const [locationForm, setLocationForm] = useState({ name: '', address: '', isActive: true });
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
 
   // User form state
@@ -57,18 +85,39 @@ export default function AdminDashboard() {
     email: '',
     password: '',
     role: 'DRIVER',
+    isActive: true,
     adminPhone: '',
     adminEmail: '',
   });
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formMessage, setFormMessage] = useState('');
+  const [settingsMessage, setSettingsMessage] = useState('');
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
+    emailTenantId: '',
+    emailClientId: '',
+    emailClientSecret: '',
+    emailFrom: '',
+    twilioAccountSid: '',
+    twilioAuthToken: '',
+    twilioFromNumber: '',
+    hasEmailClientSecret: false,
+    hasTwilioAuthToken: false,
+  });
 
   useEffect(() => {
     fetchStats();
     fetchCheckIns();
+    fetchLatestLocations();
     fetchLocations();
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    if (session?.user?.role === 'SUPERUSER') {
+      fetchNotificationSettings();
+    }
+  }, [session?.user?.role]);
 
   async function fetchStats() {
     const res = await fetch('/api/admin/stats');
@@ -80,14 +129,85 @@ export default function AdminDashboard() {
     if (res.ok) setCheckIns(await res.json());
   }
 
+  async function fetchLatestLocations() {
+    const res = await fetch('/api/checkins?includeLocation=true&includeDriver=true&latestOnly=true');
+    if (!res.ok) return;
+
+    const rows: CheckIn[] = await res.json();
+    const points = rows
+      .filter((ci) => ci.latitude != null && ci.longitude != null)
+      .map((ci) => ({
+        id: ci.id,
+        driverName: ci.driver?.name || ci.driverId,
+        locationName: ci.location?.name,
+        latitude: ci.latitude as number,
+        longitude: ci.longitude as number,
+        checkInTime: ci.checkInTime,
+        checkOutTime: ci.checkOutTime,
+      }));
+
+    setLatestLocations(points);
+  }
+
   async function fetchLocations() {
-    const res = await fetch('/api/locations');
+    const res = await fetch('/api/locations?includeInactive=true');
     if (res.ok) setLocations(await res.json());
   }
 
   async function fetchUsers() {
     const res = await fetch('/api/admin/users');
     if (res.ok) setUsers(await res.json());
+  }
+
+  async function fetchNotificationSettings() {
+    const res = await fetch('/api/admin/settings/notifications');
+    if (!res.ok) return;
+
+    const data = await res.json();
+    setNotificationSettings((prev) => ({
+      ...prev,
+      emailTenantId: data.emailTenantId || '',
+      emailClientId: data.emailClientId || '',
+      emailFrom: data.emailFrom || '',
+      twilioAccountSid: data.twilioAccountSid || '',
+      twilioFromNumber: data.twilioFromNumber || '',
+      hasEmailClientSecret: Boolean(data.hasEmailClientSecret),
+      hasTwilioAuthToken: Boolean(data.hasTwilioAuthToken),
+      emailClientSecret: '',
+      twilioAuthToken: '',
+    }));
+  }
+
+  async function handleSettingsSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSettingsMessage('');
+    setSavingSettings(true);
+
+    const payload = {
+      emailTenantId: notificationSettings.emailTenantId,
+      emailClientId: notificationSettings.emailClientId,
+      emailClientSecret: notificationSettings.emailClientSecret,
+      emailFrom: notificationSettings.emailFrom,
+      twilioAccountSid: notificationSettings.twilioAccountSid,
+      twilioAuthToken: notificationSettings.twilioAuthToken,
+      twilioFromNumber: notificationSettings.twilioFromNumber,
+    };
+
+    const res = await fetch('/api/admin/settings/notifications', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      setSettingsMessage('Notification settings saved.');
+      await fetchNotificationSettings();
+    } else {
+      const err = await res.json();
+      setSettingsMessage(err.error || 'Failed to save settings.');
+    }
+
+    setSavingSettings(false);
   }
 
   // --- Location management ---
@@ -104,7 +224,7 @@ export default function AdminDashboard() {
       if (res.ok) {
         setFormMessage('Location updated!');
         setEditingLocation(null);
-        setLocationForm({ name: '', address: '' });
+        setLocationForm({ name: '', address: '', isActive: true });
         fetchLocations();
         fetchStats();
       }
@@ -116,7 +236,7 @@ export default function AdminDashboard() {
       });
       if (res.ok) {
         setFormMessage('Location created!');
-        setLocationForm({ name: '', address: '' });
+        setLocationForm({ name: '', address: '', isActive: true });
         fetchLocations();
         fetchStats();
       }
@@ -138,7 +258,7 @@ export default function AdminDashboard() {
     setFormMessage('');
 
     if (editingUser) {
-      const body: any = { ...userForm };
+      const body: Record<string, string | boolean> = { ...userForm };
       if (!body.password) delete body.password;
       const res = await fetch(`/api/admin/users/${editingUser.id}`, {
         method: 'PUT',
@@ -148,7 +268,7 @@ export default function AdminDashboard() {
       if (res.ok) {
         setFormMessage('User updated!');
         setEditingUser(null);
-        setUserForm({ name: '', email: '', password: '', role: 'DRIVER', adminPhone: '', adminEmail: '' });
+        setUserForm({ name: '', email: '', password: '', role: 'DRIVER', isActive: true, adminPhone: '', adminEmail: '' });
         fetchUsers();
         fetchStats();
       }
@@ -160,7 +280,7 @@ export default function AdminDashboard() {
       });
       if (res.ok) {
         setFormMessage('User created!');
-        setUserForm({ name: '', email: '', password: '', role: 'DRIVER', adminPhone: '', adminEmail: '' });
+        setUserForm({ name: '', email: '', password: '', role: 'DRIVER', isActive: true, adminPhone: '', adminEmail: '' });
         fetchUsers();
         fetchStats();
       } else {
@@ -201,7 +321,13 @@ export default function AdminDashboard() {
 
       {/* Tabs */}
       <nav className="bg-white border-b px-6 flex gap-4">
-        {(['overview', 'locations', 'users'] as ActiveTab[]).map((t) => (
+        {([
+          'overview',
+          'locations',
+          'users',
+          'map',
+          ...(session?.user?.role === 'SUPERUSER' ? (['settings'] as ActiveTab[]) : []),
+        ] as ActiveTab[]).map((t) => (
           <button
             key={t}
             onClick={() => { setTab(t); setFormMessage(''); }}
@@ -325,6 +451,14 @@ export default function AdminDashboard() {
                     placeholder="123 Main St, City, ST"
                   />
                 </div>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={locationForm.isActive}
+                    onChange={(e) => setLocationForm({ ...locationForm, isActive: e.target.checked })}
+                  />
+                  Active location
+                </label>
                 <div className="flex gap-2">
                   <button
                     type="submit"
@@ -337,7 +471,7 @@ export default function AdminDashboard() {
                       type="button"
                       onClick={() => {
                         setEditingLocation(null);
-                        setLocationForm({ name: '', address: '' });
+                        setLocationForm({ name: '', address: '', isActive: true });
                       }}
                       className="px-4 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
                     >
@@ -362,12 +496,15 @@ export default function AdminDashboard() {
                       {loc.address && (
                         <p className="text-xs text-gray-500">{loc.address}</p>
                       )}
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${loc.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {loc.isActive ? 'Active' : 'Inactive'}
+                      </span>
                     </div>
                     <div className="flex gap-2 ml-2">
                       <button
                         onClick={() => {
                           setEditingLocation(loc);
-                          setLocationForm({ name: loc.name, address: loc.address || '' });
+                          setLocationForm({ name: loc.name, address: loc.address || '', isActive: loc.isActive });
                           setFormMessage('');
                         }}
                         className="text-xs text-blue-600 hover:underline"
@@ -441,9 +578,20 @@ export default function AdminDashboard() {
                   >
                     <option value="DRIVER">Driver</option>
                     <option value="ADMIN">Admin</option>
+                    {session?.user?.role === 'SUPERUSER' && (
+                      <option value="SUPERUSER">Superuser</option>
+                    )}
                   </select>
                 </div>
-                {userForm.role === 'ADMIN' && (
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={userForm.isActive}
+                    onChange={(e) => setUserForm({ ...userForm, isActive: e.target.checked })}
+                  />
+                  Active user
+                </label>
+                {(userForm.role === 'ADMIN' || userForm.role === 'SUPERUSER') && (
                   <>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Admin Phone</label>
@@ -478,7 +626,7 @@ export default function AdminDashboard() {
                       type="button"
                       onClick={() => {
                         setEditingUser(null);
-                        setUserForm({ name: '', email: '', password: '', role: 'DRIVER', adminPhone: '', adminEmail: '' });
+                        setUserForm({ name: '', email: '', password: '', role: 'DRIVER', isActive: true, adminPhone: '', adminEmail: '' });
                       }}
                       className="px-4 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
                     >
@@ -505,12 +653,17 @@ export default function AdminDashboard() {
                       <p className="text-xs text-gray-500">{user.email}</p>
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full ${
-                          user.role === 'ADMIN'
-                            ? 'bg-purple-100 text-purple-700'
-                            : 'bg-blue-100 text-blue-700'
+                          user.role === 'SUPERUSER'
+                            ? 'bg-amber-100 text-amber-700'
+                            : user.role === 'ADMIN'
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-blue-100 text-blue-700'
                         }`}
                       >
                         {user.role}
+                      </span>
+                      <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${user.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {user.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
                     <div className="flex gap-2 ml-2">
@@ -522,6 +675,7 @@ export default function AdminDashboard() {
                             email: user.email,
                             password: '',
                             role: user.role,
+                            isActive: user.isActive,
                             adminPhone: user.adminPhone || '',
                             adminEmail: user.adminEmail || '',
                           });
@@ -545,6 +699,128 @@ export default function AdminDashboard() {
                 )}
               </ul>
             </div>
+          </div>
+        )}
+
+        {/* Map Tab */}
+        {tab === 'map' && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-lg shadow p-4 flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-800">Driver Last Locations</h2>
+                <p className="text-sm text-gray-600">
+                  Active drivers are blue. Checked-out drivers remain on the map in gray.
+                </p>
+              </div>
+              <button
+                onClick={fetchLatestLocations}
+                className="bg-blue-600 text-white px-3 py-2 rounded-md hover:bg-blue-700 text-sm"
+              >
+                Refresh Map
+              </button>
+            </div>
+
+            <div className="bg-white rounded-lg shadow p-4">
+              {latestLocations.length > 0 ? (
+                <DriverMap points={latestLocations} />
+              ) : (
+                <p className="text-sm text-gray-500">No driver GPS locations available yet.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Settings Tab */}
+        {tab === 'settings' && session?.user?.role === 'SUPERUSER' && (
+          <div className="bg-white rounded-lg shadow p-6 max-w-3xl">
+            <h2 className="font-semibold text-gray-800 mb-1">Notification Provider Settings</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Configure Microsoft Graph email and Twilio SMS credentials for alert delivery.
+            </p>
+
+            <form onSubmit={handleSettingsSubmit} className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Tenant ID</label>
+                  <input
+                    type="text"
+                    value={notificationSettings.emailTenantId}
+                    onChange={(e) => setNotificationSettings({ ...notificationSettings, emailTenantId: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Client ID</label>
+                  <input
+                    type="text"
+                    value={notificationSettings.emailClientId}
+                    onChange={(e) => setNotificationSettings({ ...notificationSettings, emailClientId: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Client Secret</label>
+                  <input
+                    type="password"
+                    value={notificationSettings.emailClientSecret}
+                    placeholder={notificationSettings.hasEmailClientSecret ? 'Stored (enter to replace)' : ''}
+                    onChange={(e) => setNotificationSettings({ ...notificationSettings, emailClientSecret: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email From</label>
+                  <input
+                    type="email"
+                    value={notificationSettings.emailFrom}
+                    onChange={(e) => setNotificationSettings({ ...notificationSettings, emailFrom: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Twilio Account SID</label>
+                  <input
+                    type="text"
+                    value={notificationSettings.twilioAccountSid}
+                    onChange={(e) => setNotificationSettings({ ...notificationSettings, twilioAccountSid: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Twilio Auth Token</label>
+                  <input
+                    type="password"
+                    value={notificationSettings.twilioAuthToken}
+                    placeholder={notificationSettings.hasTwilioAuthToken ? 'Stored (enter to replace)' : ''}
+                    onChange={(e) => setNotificationSettings({ ...notificationSettings, twilioAuthToken: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Twilio From Number</label>
+                  <input
+                    type="text"
+                    value={notificationSettings.twilioFromNumber}
+                    onChange={(e) => setNotificationSettings({ ...notificationSettings, twilioFromNumber: e.target.value })}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={savingSettings}
+                className="bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-60"
+              >
+                {savingSettings ? 'Saving...' : 'Save Settings'}
+              </button>
+
+              {settingsMessage && (
+                <p className={`text-sm font-medium ${settingsMessage.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>
+                  {settingsMessage}
+                </p>
+              )}
+            </form>
           </div>
         )}
       </main>

@@ -6,9 +6,11 @@ A driver safety tracking Progressive Web App (PWA) built with Next.js, TypeScrip
 
 - **Driver check-in / check-out** at specific locations
 - **Optional geolocation capture** at check-in (if browser permission granted)
-- **Admin dashboard** with location management, user management, and check-in history
+- **Admin dashboard** with location management, user management, check-in history, and last-location map view
+- **Superuser settings panel** for email/SMS provider configuration
 - **2-hour alert system**: background cron job sends email and SMS alerts when a driver has been checked in for more than 2 hours
-- **Role-based authentication** (ADMIN / DRIVER)
+- **Role-based authentication** (SUPERUSER / ADMIN / DRIVER)
+- **Active / inactive controls** for drivers and locations
 - **PWA** – installable on mobile devices with offline support
 
 ## Quick Start (Docker)
@@ -29,7 +31,7 @@ A driver safety tracking Progressive Web App (PWA) built with Next.js, TypeScrip
 
    The app container automatically applies any pending database migrations on startup.
 
-3. **Seed initial data** (admin + driver user, sample locations)
+3. **Seed initial data** (superuser + admin + driver users, sample locations)
 
    ```bash
    docker exec -it driver_tracker_app npx ts-node --compiler-options '{"module":"CommonJS"}' prisma/seed.ts
@@ -40,6 +42,7 @@ A driver safety tracking Progressive Web App (PWA) built with Next.js, TypeScrip
    Visit [http://localhost:3000](http://localhost:3000)
 
    Default credentials:
+   - Superuser: `superuser@example.com` / `super123`
    - Admin: `admin@example.com` / `admin123`
    - Driver: `driver@example.com` / `driver123`
 
@@ -69,6 +72,44 @@ npm run db:seed
 npm run dev
 ```
 
+### DB Change Quick Checklist
+
+Use this checklist whenever a change touches Prisma schema or DB-dependent behavior:
+
+1. Update `prisma/schema.prisma`.
+2. Create or update migration SQL under `prisma/migrations`.
+3. Run `npx prisma generate`.
+4. Apply migrations:
+   - Local feature work: `npx prisma migrate dev`
+   - Deployment/testing environments: `npx prisma migrate deploy`
+5. Update this README if setup/run steps changed.
+
+### Database Changes After Pulling Code Updates
+
+When the schema or migrations change, run the DB steps before starting the app.
+
+For local development:
+
+```bash
+# Apply committed migrations
+npx prisma migrate deploy
+
+# Regenerate Prisma client for updated types
+npx prisma generate
+```
+
+When creating a new schema change in development:
+
+```bash
+# Create and apply a new migration
+npx prisma migrate dev --name describe_change
+
+# Regenerate Prisma client
+npx prisma generate
+```
+
+If you are using Docker, the container startup script applies pending migrations automatically, but you should still run `npx prisma generate` locally after pulling schema changes so editor types stay in sync.
+
 ### Environment Variables
 
 | Variable | Description |
@@ -83,6 +124,7 @@ npm run dev
 | `TWILIO_ACCOUNT_SID` | Twilio account SID |
 | `TWILIO_AUTH_TOKEN` | Twilio auth token |
 | `TWILIO_FROM_NUMBER` | Twilio phone number (E.164 format) |
+| `SETTINGS_ENCRYPTION_KEY` | 32-byte key (raw or base64) used to encrypt notification provider secrets stored in DB |
 
 ## Architecture
 

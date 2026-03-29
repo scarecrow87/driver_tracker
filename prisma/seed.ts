@@ -4,6 +4,21 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
+  // Create superuser account
+  const superuserPassword = await bcrypt.hash('super123', 10);
+  const superuser = await prisma.user.upsert({
+    where: { email: 'superuser@example.com' },
+    update: {},
+    create: {
+      email: 'superuser@example.com',
+      name: 'Superuser',
+      role: Role.SUPERUSER,
+      password: superuserPassword,
+      adminPhone: '+1234567899',
+      adminEmail: 'superuser@example.com',
+    },
+  });
+
   // Create admin user
   const adminPassword = await bcrypt.hash('admin123', 10);
   const admin = await prisma.user.upsert({
@@ -53,7 +68,7 @@ async function main() {
     },
   });
 
-  console.log('Seeded:', { admin, driver, location1, location2 });
+  console.log('Seeded:', { superuser, admin, driver, location1, location2 });
 }
 
 main()

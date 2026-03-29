@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions, isAdminOrSuperuser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
   address: z.string().optional(),
+  isActive: z.boolean().optional(),
 });
 
 // PUT /api/locations/[id] – update a location (admin only)
@@ -15,7 +16,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
+  if (!isAdminOrSuperuser(session)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -42,7 +43,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
+  if (!isAdminOrSuperuser(session)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

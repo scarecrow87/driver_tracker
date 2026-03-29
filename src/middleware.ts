@@ -5,9 +5,10 @@ export default withAuth(
   function middleware(req) {
     const { pathname } = req.nextUrl;
     const role = req.nextauth.token?.role;
+    const isAdminSide = role === 'ADMIN' || role === 'SUPERUSER';
 
     // Admin-only routes
-    if (pathname.startsWith('/admin') && role !== 'ADMIN') {
+    if (pathname.startsWith('/admin') && !isAdminSide) {
       return NextResponse.redirect(new URL('/driver/dashboard', req.url));
     }
 

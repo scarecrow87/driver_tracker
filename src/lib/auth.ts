@@ -3,6 +3,24 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { prisma } from './prisma';
 
+type SessionLike = {
+  user?: {
+    role?: string;
+  };
+} | null;
+
+export function isSuperuser(session: SessionLike): boolean {
+  return session?.user?.role === 'SUPERUSER';
+}
+
+export function isAdmin(session: SessionLike): boolean {
+  return session?.user?.role === 'ADMIN';
+}
+
+export function isAdminOrSuperuser(session: SessionLike): boolean {
+  return isAdmin(session) || isSuperuser(session);
+}
+
 export const authOptions: NextAuthOptions = {
   session: {
     strategy: 'jwt',
@@ -24,6 +42,7 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user) return null;
+        if (!user.isActive) return null;
 
         const isValid = await bcrypt.compare(credentials.password, user.password);
         if (!isValid) return null;
@@ -40,8 +59,9 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
+        const userWithRole = user as { id: string; role?: string };
         token.id = user.id;
-        token.role = (user as any).role;
+        token.role = userWithRole.role ?? (token.role as string | undefined) ?? 'DRIVER';
       }
       return token;
     },

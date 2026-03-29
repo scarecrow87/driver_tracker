@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions, isAdminOrSuperuser, isSuperuser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
@@ -9,19 +9,16 @@ const createUserSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
   password: z.string().min(6),
-  role: z.enum(['ADMIN', 'DRIVER']).default('DRIVER'),
+  role: z.enum(['ADMIN', 'DRIVER', 'SUPERUSER']).default('DRIVER'),
+  isActive: z.boolean().optional().default(true),
   adminPhone: z.string().optional(),
   adminEmail: z.string().email().optional(),
 });
 
-function isAdmin(session: any) {
-  return session?.user?.role === 'ADMIN';
-}
-
 // GET /api/admin/users – list all users
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!isAdmin(session)) {
+  if (!isAdminOrSuperuser(session)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -31,6 +28,7 @@ export async function GET() {
       email: true,
       name: true,
       role: true,
+      isActive: true,
       adminPhone: true,
       adminEmail: true,
       createdAt: true,
@@ -44,7 +42,7 @@ export async function GET() {
 // POST /api/admin/users – create a user
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!isAdmin(session)) {
+  if (!isAdminOrSuperuser(session)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -52,6 +50,13 @@ export async function POST(req: NextRequest) {
   const parsed = createUserSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  if (parsed.data.role === 'SUPERUSER' && !isSuperuser(session)) {
+    return NextResponse.json(
+      { error: 'Only superusers can create superusers' },
+      { status: 403 }
+    );
   }
 
   const hashed = await bcrypt.hash(parsed.data.password, 10);
@@ -65,6 +70,7 @@ export async function POST(req: NextRequest) {
       email: true,
       name: true,
       role: true,
+      isActive: true,
       adminPhone: true,
       adminEmail: true,
       createdAt: true,

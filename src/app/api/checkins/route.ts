@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { authOptions, isAdminOrSuperuser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 // GET /api/checkins – list check-ins (admin sees all, driver sees own)
@@ -14,9 +14,11 @@ export async function GET(req: NextRequest) {
   const includeLocation = searchParams.get('includeLocation') === 'true';
   const includeDriver = searchParams.get('includeDriver') === 'true';
   const openOnly = searchParams.get('openOnly') === 'true';
+  const latestOnly = searchParams.get('latestOnly') === 'true';
+  const canViewAll = isAdminOrSuperuser(session);
 
   const where =
-    session.user.role === 'ADMIN'
+    canViewAll
       ? openOnly ? { checkOutTime: null } : {}
       : { driverId: session.user.id };
 
@@ -26,7 +28,10 @@ export async function GET(req: NextRequest) {
       location: includeLocation,
       driver: includeDriver ? { select: { id: true, name: true, email: true } } : false,
     },
-    orderBy: { checkInTime: 'desc' },
+    orderBy: latestOnly
+      ? [{ driverId: 'asc' }, { checkInTime: 'desc' }]
+      : { checkInTime: 'desc' },
+    distinct: latestOnly && canViewAll ? ['driverId'] : undefined,
     take: 100,
   });
 

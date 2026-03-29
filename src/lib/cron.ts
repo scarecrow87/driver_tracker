@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { prisma } from './prisma';
 import { sendEmailAlert, sendSmsAlert } from './notifications';
+import { getNotificationProviderConfig } from './notification-settings';
 
 let cronStarted = false;
 
@@ -40,8 +41,10 @@ export function startCronJob(): void {
 
       // Fetch all admins for notifications
       const admins = await prisma.user.findMany({
-        where: { role: 'ADMIN' },
+        where: { role: { in: ['ADMIN', 'SUPERUSER'] } },
       });
+
+      const providerConfig = await getNotificationProviderConfig();
 
       for (const checkIn of overdueCheckIns) {
         const duration = Math.floor(
@@ -59,11 +62,12 @@ export function startCronJob(): void {
             await sendEmailAlert(
               admin.adminEmail,
               'Driver Check-In Alert',
-              message
+              message,
+              providerConfig
             );
           }
           if (admin.adminPhone) {
-            await sendSmsAlert(admin.adminPhone, message);
+            await sendSmsAlert(admin.adminPhone, message, providerConfig);
           }
         }
 

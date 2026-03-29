@@ -3,18 +3,22 @@
  * These are placeholder implementations – wire up real credentials via env vars.
  */
 
+import { getNotificationProviderConfig, NotificationProviderConfig } from './notification-settings';
+
 /**
  * Send an email alert using Microsoft Graph API.
  */
 export async function sendEmailAlert(
   to: string,
   subject: string,
-  body: string
+  body: string,
+  configOverride?: NotificationProviderConfig
 ): Promise<void> {
-  const tenantId = process.env.EMAIL_TENANT_ID;
-  const clientId = process.env.EMAIL_CLIENT_ID;
-  const clientSecret = process.env.EMAIL_CLIENT_SECRET;
-  const from = process.env.EMAIL_FROM;
+  const config = configOverride ?? await getNotificationProviderConfig();
+  const tenantId = config.emailTenantId;
+  const clientId = config.emailClientId;
+  const clientSecret = config.emailClientSecret;
+  const from = config.emailFrom;
 
   if (!tenantId || !clientId || !clientSecret || !from) {
     console.log('[Email] Missing credentials, skipping email alert.');
@@ -66,10 +70,15 @@ export async function sendEmailAlert(
 /**
  * Send an SMS alert using Twilio.
  */
-export async function sendSmsAlert(to: string, message: string): Promise<void> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID;
-  const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM_NUMBER;
+export async function sendSmsAlert(
+  to: string,
+  message: string,
+  configOverride?: NotificationProviderConfig
+): Promise<void> {
+  const config = configOverride ?? await getNotificationProviderConfig();
+  const accountSid = config.twilioAccountSid;
+  const authToken = config.twilioAuthToken;
+  const from = config.twilioFromNumber;
 
   if (!accountSid || !authToken || !from) {
     console.log('[SMS] Missing credentials, skipping SMS alert.');
