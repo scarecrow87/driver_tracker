@@ -681,30 +681,36 @@ export default function AdminDashboard() {
                       </span>
                     </div>
                     <div className="flex gap-2 ml-2">
-                      <button
-                        onClick={() => {
-                          setEditingUser(user);
-                          setUserForm({
-                            name: user.name,
-                            email: user.email,
-                            password: '',
-                            role: user.role,
-                            isActive: user.isActive,
-                            adminPhone: user.adminPhone || '',
-                            adminEmail: user.adminEmail || '',
-                          });
-                          setFormMessage('');
-                        }}
-                        className="text-xs text-blue-600 hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUser(user.id)}
-                        className="text-xs text-red-600 hover:underline"
-                      >
-                        Delete
-                      </button>
+                      {(session?.user?.role === 'SUPERUSER' || user.role !== 'SUPERUSER') && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditingUser(user);
+                              setUserForm({
+                                name: user.name,
+                                email: user.email,
+                                password: '',
+                                role: user.role,
+                                isActive: user.isActive,
+                                adminPhone: user.adminPhone || '',
+                                adminEmail: user.adminEmail || '',
+                              });
+                              setFormMessage('');
+                            }}
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            Edit
+                          </button>
+                          {session?.user?.id !== user.id && (
+                            <button
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="text-xs text-red-600 hover:underline"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </>
+                      )}
                     </div>
                   </li>
                 ))}

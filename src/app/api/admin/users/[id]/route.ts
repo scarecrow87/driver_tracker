@@ -97,6 +97,10 @@ export async function DELETE(
     return NextResponse.json({ error: 'User not found' }, { status: 404 });
   }
 
+  if (session!.user.id === params.id) {
+    return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 403 });
+  }
+
   if (existingUser.role === 'SUPERUSER' && !isSuperuser(session)) {
     return NextResponse.json(
       { error: 'Only superusers can delete superusers' },

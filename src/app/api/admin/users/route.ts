@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, isAdminOrSuperuser, isSuperuser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { Role } from '@prisma/client';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 
@@ -15,14 +16,20 @@ const createUserSchema = z.object({
   adminEmail: z.string().email().optional(),
 });
 
-// GET /api/admin/users – list all users
+// GET /api/admin/users – list users
+// Superusers see all roles. Admins see only ADMIN and DRIVER accounts.
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!isAdminOrSuperuser(session)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const roleFilter = isSuperuser(session)
+    ? undefined
+    : { in: [Role.ADMIN, Role.DRIVER] };
+
   const users = await prisma.user.findMany({
+    where: roleFilter ? { role: roleFilter } : undefined,
     select: {
       id: true,
       email: true,
