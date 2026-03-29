@@ -29,6 +29,7 @@ interface CheckIn {
   checkOutTime?: string;
   latitude?: number;
   longitude?: number;
+  alertLevel?: number;
   location?: Location;
   driver?: { id: string; name: string; email: string };
 }
@@ -377,6 +378,7 @@ export default function AdminDashboard() {
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Check In</th>
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Check Out</th>
                       <th className="text-left px-4 py-2 font-medium text-gray-600">GPS</th>
+                      <th className="text-left px-4 py-2 font-medium text-gray-600">Alert</th>
                       <th className="text-left px-4 py-2 font-medium text-gray-600">Status</th>
                     </tr>
                   </thead>
@@ -395,6 +397,18 @@ export default function AdminDashboard() {
                             : '\u2014'}
                         </td>
                         <td className="px-4 py-3">
+                          {ci.alertLevel === 1 && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">⚠ Alerted</span>
+                          )}
+                          {ci.alertLevel === 2 && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">🔶 Escalated</span>
+                          )}
+                          {(ci.alertLevel ?? 0) >= 3 && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">🔴 Urgent</span>
+                          )}
+                          {(ci.alertLevel ?? 0) === 0 && <span className="text-gray-400 text-xs">—</span>}
+                        </td>
+                        <td className="px-4 py-3">
                           <span
                             className={`px-2 py-1 rounded-full text-xs font-medium ${
                               ci.checkOutTime
@@ -409,7 +423,7 @@ export default function AdminDashboard() {
                     ))}
                     {checkIns.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
+                        <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
                           No check-ins found.
                         </td>
                       </tr>

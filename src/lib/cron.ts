@@ -6,6 +6,35 @@ import { getNotificationProviderConfig } from './notification-settings';
 let cronStarted = false;
 
 /**
+ * Escalation tiers. Each tier describes the current alertLevel that must be
+ * matched, the minimum check-in age in hours before this alert fires, and the
+ * email/SMS messaging to use.
+ */
+const ESCALATION_TIERS = [
+  {
+    currentLevel: 0,
+    hoursThreshold: 2,
+    emailSubject: 'Driver Check-In Alert',
+    buildMessage: (name: string, location: string, minutes: number) =>
+      `ALERT: Driver ${name} has been checked in at ${location} for ${minutes} minutes without checking out.`,
+  },
+  {
+    currentLevel: 1,
+    hoursThreshold: 4,
+    emailSubject: 'Escalation: Driver Still Checked In',
+    buildMessage: (name: string, location: string, minutes: number) =>
+      `ESCALATION: Driver ${name} is still checked in at ${location} — now ${minutes} minutes. Please follow up immediately.`,
+  },
+  {
+    currentLevel: 2,
+    hoursThreshold: 8,
+    emailSubject: 'URGENT: Driver Not Checked Out',
+    buildMessage: (name: string, location: string, minutes: number) =>
+      `URGENT: Driver ${name} has been checked in at ${location} for ${minutes} minutes with no response. Immediate action required.`,
+  },
+] as const;
+
+/**
  * Start the background cron job that checks for overdue check-ins.
  * Runs every 15 minutes. Safe to call multiple times (only starts once).
  */
@@ -18,64 +47,71 @@ export function startCronJob(): void {
   // Run every 15 minutes
   cron.schedule('*/15 * * * *', async () => {
     console.log('[Cron] Checking for overdue check-ins...');
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
 
     try {
-      // Find open check-ins older than 2 hours that haven't been alerted
-      const overdueCheckIns = await prisma.checkIn.findMany({
-        where: {
-          checkOutTime: null,
-          checkInTime: { lt: twoHoursAgo },
-          alertSent: false,
-        },
-        include: {
-          driver: true,
-          location: true,
-        },
-      });
-
-      if (overdueCheckIns.length === 0) {
-        console.log('[Cron] No overdue check-ins found.');
-        return;
-      }
-
-      // Fetch all admins for notifications
-      const admins = await prisma.user.findMany({
-        where: { role: { in: ['ADMIN', 'SUPERUSER'] } },
-      });
-
       const providerConfig = await getNotificationProviderConfig();
 
-      for (const checkIn of overdueCheckIns) {
-        const duration = Math.floor(
-          (Date.now() - checkIn.checkInTime.getTime()) / 1000 / 60
-        );
-        const message =
-          `ALERT: Driver ${checkIn.driver.name} has been checked in at ` +
-          `${checkIn.location.name} for ${duration} minutes without checking out.`;
+      // Fetch all admins and superusers once per run
+      const recipients = await prisma.user.findMany({
+        where: { role: { in: ['ADMIN', 'SUPERUSER'] }, isActive: true },
+        select: { adminEmail: true, adminPhone: true },
+      });
 
-        console.log(`[Cron] Overdue check-in: ${message}`);
+      // Process each escalation tier in order (lowest to highest)
+      for (const tier of ESCALATION_TIERS) {
+        const threshold = new Date(Date.now() - tier.hoursThreshold * 60 * 60 * 1000);
 
-        // Notify all admins
-        for (const admin of admins) {
-          if (admin.adminEmail) {
-            await sendEmailAlert(
-              admin.adminEmail,
-              'Driver Check-In Alert',
-              message,
-              providerConfig
-            );
-          }
-          if (admin.adminPhone) {
-            await sendSmsAlert(admin.adminPhone, message, providerConfig);
-          }
+        const overdueCheckIns = await prisma.checkIn.findMany({
+          where: {
+            checkOutTime: null,
+            checkInTime: { lt: threshold },
+            alertLevel: tier.currentLevel,
+          },
+          include: {
+            driver: true,
+            location: true,
+          },
+        });
+
+        if (overdueCheckIns.length === 0) {
+          console.log(`[Cron] Tier ${tier.currentLevel}: no check-ins to escalate.`);
+          continue;
         }
 
-        // Mark alert as sent
-        await prisma.checkIn.update({
-          where: { id: checkIn.id },
-          data: { alertSent: true },
-        });
+        console.log(`[Cron] Tier ${tier.currentLevel}: ${overdueCheckIns.length} check-in(s) to escalate.`);
+
+        for (const checkIn of overdueCheckIns) {
+          const minutes = Math.floor(
+            (Date.now() - checkIn.checkInTime.getTime()) / 1000 / 60
+          );
+          const message = tier.buildMessage(
+            checkIn.driver.name,
+            checkIn.location.name,
+            minutes
+          );
+
+          console.log(`[Cron] ${tier.emailSubject}: ${message}`);
+
+          for (const recipient of recipients) {
+            if (recipient.adminEmail) {
+              await sendEmailAlert(
+                recipient.adminEmail,
+                tier.emailSubject,
+                message,
+                providerConfig
+              );
+            }
+            if (recipient.adminPhone) {
+              await sendSmsAlert(recipient.adminPhone, message, providerConfig);
+            }
+          }
+
+          // Advance the alert level for this check-in
+          await prisma.checkIn.update({
+            where: { id: checkIn.id },
+            data: { alertLevel: tier.currentLevel + 1 },
+          });
+        }
       }
     } catch (err) {
       console.error('[Cron] Error during check-in scan:', err);
