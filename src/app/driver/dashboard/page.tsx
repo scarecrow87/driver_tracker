@@ -2,6 +2,15 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
+import OfflineWarning from '@/components/OfflineWarning';
+import { useOfflineStatus } from '@/hooks/useOfflineStatus';
+import { getCachedLocations, setCachedLocations } from '@/lib/offline/indexed-db';
+import {
+  processOfflineQueue,
+  queueAwareCheckIn,
+  queueAwareCheckOut,
+} from '@/lib/offline/offline-api-wrapper';
+import { getQueuedActions } from '@/lib/offline/offline-queue';
 
 interface Location {
   id: string;
@@ -21,23 +30,64 @@ interface CheckIn {
 
 export default function DriverDashboard() {
   const { data: session } = useSession();
+  const { isOnline } = useOfflineStatus();
   const [locations, setLocations] = useState<Location[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [currentCheckIn, setCurrentCheckIn] = useState<CheckIn | null>(null);
   const [selectedLocation, setSelectedLocation] = useState('');
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [queuedCount, setQueuedCount] = useState(0);
   const [message, setMessage] = useState('');
+  const [messageTone, setMessageTone] = useState<'success' | 'warning' | 'error'>('warning');
+  const [lastQueuedAction, setLastQueuedAction] = useState<'checkin' | 'checkout' | null>(null);
 
   // Fetch locations and recent check-ins on mount
   useEffect(() => {
+    loadCachedLocations();
     fetchLocations();
     fetchCheckIns();
     fetchCurrentCheckIn();
+    refreshQueuedCount();
+    flushQueue();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (isOnline) {
+      flushQueue();
+      fetchLocations();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline]);
+
+  async function loadCachedLocations() {
+    const cached = await getCachedLocations();
+    if (cached.length) {
+      setLocations(
+        cached.map((loc) => ({
+          id: loc.id,
+          name: loc.name,
+          address: loc.address,
+        }))
+      );
+    }
+  }
 
   async function fetchLocations() {
     const res = await fetch('/api/locations');
-    if (res.ok) setLocations(await res.json());
+    if (res.ok) {
+      const rows = await res.json();
+      setLocations(rows);
+      await setCachedLocations(
+        rows.map((loc: Location & { isActive?: boolean }) => ({
+          id: loc.id,
+          name: loc.name,
+          address: loc.address,
+          isActive: loc.isActive,
+        }))
+      );
+    }
   }
 
   async function fetchCheckIns() {
@@ -53,8 +103,34 @@ export default function DriverDashboard() {
     }
   }
 
+  async function refreshQueuedCount() {
+    const queued = await getQueuedActions();
+    setQueuedCount(queued.length);
+  }
+
+  async function flushQueue() {
+    if (!navigator.onLine) return;
+
+    setSyncing(true);
+    const result = await processOfflineQueue();
+    setSyncing(false);
+    await refreshQueuedCount();
+
+    if (result.synced > 0) {
+      await fetchCheckIns();
+      await fetchCurrentCheckIn();
+      setMessageTone('success');
+      setLastQueuedAction(null);
+      setMessage(`Synced ${result.synced} queued action${result.synced === 1 ? '' : 's'}.`);
+    } else if (result.failed > 0) {
+      setMessageTone('warning');
+      setMessage(`Still waiting to sync ${result.failed} queued action${result.failed === 1 ? '' : 's'}.`);
+    }
+  }
+
   async function handleCheckIn() {
     if (!selectedLocation) {
+      setMessageTone('error');
       setMessage('Please select a location');
       return;
     }
@@ -79,39 +155,57 @@ export default function DriverDashboard() {
       console.log('Geolocation not available, checking in without coordinates.');
     }
 
-    const res = await fetch('/api/checkin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ locationId: selectedLocation, latitude, longitude }),
-    });
+    try {
+      const result = await queueAwareCheckIn({
+        locationId: selectedLocation,
+        latitude,
+        longitude,
+      });
 
-    const data = await res.json();
-    setLoading(false);
-
-    if (res.ok) {
-      setCurrentCheckIn(data);
-      setMessage('Checked in successfully!');
-      fetchCheckIns();
-    } else {
-      setMessage(data.error || 'Failed to check in');
+      if (result.status === 'synced') {
+        setCurrentCheckIn(result.data as CheckIn);
+        setMessageTone('success');
+        setMessage('Checked in successfully!');
+        fetchCheckIns();
+        fetchCurrentCheckIn();
+      } else {
+        await refreshQueuedCount();
+        setLastQueuedAction('checkin');
+        setMessageTone('warning');
+        setMessage('Check-in queued. Nothing has been logged yet; it will sync when you are back online.');
+      }
+    } catch (error) {
+      setMessageTone('error');
+      setMessage(error instanceof Error ? error.message : 'Failed to check in');
     }
+
+    setLoading(false);
   }
 
   async function handleCheckOut() {
     setLoading(true);
     setMessage('');
 
-    const res = await fetch('/api/checkout', { method: 'POST' });
-    const data = await res.json();
-    setLoading(false);
+    try {
+      const result = await queueAwareCheckOut();
 
-    if (res.ok) {
-      setCurrentCheckIn(null);
-      setMessage('Checked out successfully!');
-      fetchCheckIns();
-    } else {
-      setMessage(data.error || 'Failed to check out');
+      if (result.status === 'synced') {
+        setCurrentCheckIn(null);
+        setMessageTone('success');
+        setMessage('Checked out successfully!');
+        fetchCheckIns();
+      } else {
+        await refreshQueuedCount();
+        setLastQueuedAction('checkout');
+        setMessageTone('warning');
+        setMessage('Check-out queued. Nothing has been logged yet; it will sync when you are back online.');
+      }
+    } catch (error) {
+      setMessageTone('error');
+      setMessage(error instanceof Error ? error.message : 'Failed to check out');
     }
+
+    setLoading(false);
   }
 
   function formatDateTime(dt: string) {
@@ -135,6 +229,13 @@ export default function DriverDashboard() {
       </header>
 
       <main className="max-w-2xl mx-auto p-6 space-y-6">
+        <OfflineWarning
+          isOnline={isOnline}
+          syncing={syncing}
+          queuedCount={queuedCount}
+          lastQueuedAction={lastQueuedAction}
+        />
+
         {/* Status Card */}
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">
@@ -206,7 +307,11 @@ export default function DriverDashboard() {
           {message && (
             <p
               className={`mt-3 text-sm font-medium ${
-                message.includes('success') ? 'text-green-600' : 'text-red-600'
+                messageTone === 'success'
+                  ? 'text-green-600'
+                  : messageTone === 'warning'
+                    ? 'text-amber-700'
+                    : 'text-red-600'
               }`}
             >
               {message}
