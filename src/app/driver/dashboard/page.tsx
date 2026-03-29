@@ -4,7 +4,7 @@ import { useSession, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
 import OfflineWarning from '@/components/OfflineWarning';
 import { useOfflineStatus } from '@/hooks/useOfflineStatus';
-import { getCachedLocations, setCachedLocations } from '@/lib/offline/indexed-db';
+import { getCachedLocations, setCachedLocations, getMeta, setMeta } from '@/lib/offline/indexed-db';
 import {
   processOfflineQueue,
   queueAwareCheckIn,
@@ -41,6 +41,7 @@ export default function DriverDashboard() {
   const [message, setMessage] = useState('');
   const [messageTone, setMessageTone] = useState<'success' | 'warning' | 'error'>('warning');
   const [lastQueuedAction, setLastQueuedAction] = useState<'checkin' | 'checkout' | null>(null);
+  const [shareGps, setShareGps] = useState(false);
 
   // Fetch locations and recent check-ins on mount
   useEffect(() => {
@@ -51,6 +52,13 @@ export default function DriverDashboard() {
     refreshQueuedCount();
     flushQueue();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load persisted shareGps preference
+  useEffect(() => {
+    getMeta('shareGps').then((val) => {
+      if (val === 'true') setShareGps(true);
+    });
   }, []);
 
   useEffect(() => {
@@ -181,6 +189,11 @@ export default function DriverDashboard() {
     }
   }
 
+  async function handleShareGpsChange(checked: boolean) {
+    setShareGps(checked);
+    await setMeta('shareGps', checked ? 'true' : 'false');
+  }
+
   async function handleCheckIn() {
     if (!selectedLocation) {
       setMessageTone('error');
@@ -191,21 +204,21 @@ export default function DriverDashboard() {
     setLoading(true);
     setMessage('');
 
-    // Request geolocation
     let latitude: number | undefined;
     let longitude: number | undefined;
 
-    try {
-      if ('geolocation' in navigator) {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 })
-        );
-        latitude = pos.coords.latitude;
-        longitude = pos.coords.longitude;
+    if (shareGps) {
+      try {
+        if ('geolocation' in navigator) {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 })
+          );
+          latitude = pos.coords.latitude;
+          longitude = pos.coords.longitude;
+        }
+      } catch {
+        console.log('Geolocation not available, checking in without coordinates.');
       }
-    } catch {
-      // Geolocation denied or unavailable – proceed without coordinates
-      console.log('Geolocation not available, checking in without coordinates.');
     }
 
     try {
@@ -347,6 +360,15 @@ export default function DriverDashboard() {
                   ))}
                 </select>
               </div>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={shareGps}
+                  onChange={(e) => handleShareGpsChange(e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                Share GPS location on check-in
+              </label>
               <button
                 onClick={handleCheckIn}
                 disabled={loading}

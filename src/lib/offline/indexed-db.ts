@@ -62,6 +62,17 @@ export function getOfflineDb() {
   return dbPromise;
 }
 
+export async function getMeta(key: string): Promise<string | null> {
+  const db = await getOfflineDb();
+  const row = await db.get('meta', key);
+  return row?.value ?? null;
+}
+
+export async function setMeta(key: string, value: string): Promise<void> {
+  const db = await getOfflineDb();
+  await db.put('meta', { key, value, updatedAt: Date.now() });
+}
+
 export async function getCachedLocations(): Promise<CachedLocation[]> {
   const db = await getOfflineDb();
   const rows = await db.getAll('locations');
