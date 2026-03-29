@@ -8,6 +8,7 @@ const checkInSchema = z.object({
   locationId: z.string().min(1),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
+  idempotencyKey: z.string().optional(),
 });
 
 // POST /api/checkin – create a check-in (driver only)
@@ -25,6 +26,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Driver account is inactive' }, { status: 403 });
   }
 
+  const body = await req.json();
+  const parsed = checkInSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  if (parsed.data.idempotencyKey) {
+    const deduped = await prisma.checkIn.findFirst({
+      where: {
+        driverId: session.user.id,
+        checkInRequestKey: parsed.data.idempotencyKey,
+      },
+      include: { location: true },
+    });
+
+    if (deduped) {
+      return NextResponse.json(deduped);
+    }
+  }
+
   // Check for existing open check-in
   const existing = await prisma.checkIn.findFirst({
     where: {
@@ -39,12 +60,6 @@ export async function POST(req: NextRequest) {
       { error: 'You already have an open check-in', checkIn: existing },
       { status: 409 }
     );
-  }
-
-  const body = await req.json();
-  const parsed = checkInSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
   const location = await prisma.location.findUnique({
@@ -64,6 +79,7 @@ export async function POST(req: NextRequest) {
       locationId: parsed.data.locationId,
       latitude: parsed.data.latitude,
       longitude: parsed.data.longitude,
+      checkInRequestKey: parsed.data.idempotencyKey,
     },
     include: { location: true },
   });

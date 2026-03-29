@@ -11,6 +11,7 @@ A driver safety tracking Progressive Web App (PWA) built with Next.js, TypeScrip
 - **2-hour alert system**: background cron job sends email and SMS alerts when a driver has been checked in for more than 2 hours
 - **Role-based authentication** (SUPERUSER / ADMIN / DRIVER)
 - **Active / inactive controls** for drivers and locations
+- **Offline-ready driver flow (initial implementation)** with IndexedDB location cache, offline action queue, reconnect replay fallback, and explicit “not logged until sync” warnings
 - **PWA** – installable on mobile devices with offline support
 
 ## Quick Start (Docker)
@@ -182,14 +183,18 @@ The app can be adapted to run fully serverless (e.g. Vercel, AWS Lambda, Cloudfl
 
 ### Offline / Client-Side Operation
 
-> ⚠️ **Warning:** The app currently requires an active server connection for all check-in, check-out, and admin actions. Going offline will block these features.
+The app now includes an initial offline workflow for the driver dashboard:
 
-The PWA service worker caches static assets so the shell loads without a network connection, but API calls (check-in, check-out, location lists, etc.) will fail. Planned improvements to support offline workflows:
+- **Offline queue (implemented)** – Check-in/check-out actions are queued locally when offline or on transient network failure.
+- **Reconnect replay fallback (implemented)** – Queued actions are replayed when connectivity returns and on app load while online.
+- **Local cache (implemented)** – Active location list is cached in IndexedDB so drivers can still pick locations while offline.
+- **User-visible warning (implemented)** – Drivers see a clear offline banner and explicit warnings that queued check-in/check-out actions are not logged server-side until sync succeeds.
 
-- **Offline queue** – Use the [Background Sync API](https://developer.mozilla.org/en-US/docs/Web/API/Background_Synchronization_API) (already available in the service worker context) to queue check-in/check-out actions and replay them when connectivity is restored.
-- **Local cache** – Store location data in `IndexedDB` (e.g. via [idb](https://github.com/jakearchibald/idb)) so drivers can still select a location while offline.
-- **User-visible warning** – Detect `navigator.onLine` and the `online`/`offline` window events to display a banner warning the driver that their actions will be queued until reconnected.
-- **Conflict resolution** – Define a clear strategy (last-write-wins, server-authoritative, etc.) for resolving queued check-ins that arrive out of order after reconnection.
+Current limits and next hardening items:
+
+- **Replay paths are now redundant by design** – Queue replay runs via both Background Sync service worker events and reconnect/app-load fallback.
+- **Idempotent offline writes are now persisted** – Check-in/check-out queued payloads include idempotency keys persisted in DB-backed request key columns.
+- **Conflict safety is enforced on checkout replay** – Checkout requests can target a specific check-in, and conflicting targets return explicit `409` responses.
 
 ### Extensibility – Other Tracking Methods & Integrations
 

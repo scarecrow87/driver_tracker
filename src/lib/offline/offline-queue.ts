@@ -23,6 +23,8 @@ export async function enqueueOfflineAction(
   payload: Record<string, unknown>
 ): Promise<QueuedAction> {
   const db = await getOfflineDb();
+  const payloadIdempotency =
+    typeof payload.idempotencyKey === 'string' ? payload.idempotencyKey : undefined;
 
   const entry: QueuedAction = {
     id: newActionId(),
@@ -30,7 +32,7 @@ export async function enqueueOfflineAction(
     payload,
     createdAt: Date.now(),
     attempts: 0,
-    idempotencyKey: newIdempotencyKey(),
+    idempotencyKey: payloadIdempotency || newIdempotencyKey(),
   };
 
   await db.put('queue', entry);

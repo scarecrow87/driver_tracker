@@ -61,6 +61,47 @@ export default function DriverDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline]);
 
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+
+    const onWorkerMessage = (event: MessageEvent) => {
+      const data = event.data as
+        | { type?: string; synced?: number; failed?: number }
+        | undefined;
+
+      if (!data || data.type !== 'OFFLINE_SYNC_RESULT') {
+        return;
+      }
+
+      const synced = data.synced || 0;
+      const failed = data.failed || 0;
+
+      void refreshQueuedCount();
+
+      if (synced > 0) {
+        void fetchCheckIns();
+        void fetchCurrentCheckIn();
+        setMessageTone('success');
+        setLastQueuedAction(null);
+        setMessage(
+          `Background sync processed ${synced} queued action${synced === 1 ? '' : 's'}.`
+        );
+      } else if (failed > 0) {
+        setMessageTone('warning');
+        setMessage(
+          `Background sync still has ${failed} queued action${failed === 1 ? '' : 's'} pending.`
+        );
+      }
+    };
+
+    navigator.serviceWorker.addEventListener('message', onWorkerMessage);
+
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', onWorkerMessage);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function loadCachedLocations() {
     const cached = await getCachedLocations();
     if (cached.length) {
@@ -112,6 +153,7 @@ export default function DriverDashboard() {
     if (!navigator.onLine) return;
 
     setSyncing(true);
+    await requestServiceWorkerReplay();
     const result = await processOfflineQueue();
     setSyncing(false);
     await refreshQueuedCount();
@@ -125,6 +167,17 @@ export default function DriverDashboard() {
     } else if (result.failed > 0) {
       setMessageTone('warning');
       setMessage(`Still waiting to sync ${result.failed} queued action${result.failed === 1 ? '' : 's'}.`);
+    }
+  }
+
+  async function requestServiceWorkerReplay() {
+    if (!('serviceWorker' in navigator)) return;
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      registration.active?.postMessage({ type: 'OFFLINE_SYNC_NOW' });
+    } catch {
+      // Ignore worker messaging failures and keep app-runtime queue replay.
     }
   }
 
@@ -187,7 +240,7 @@ export default function DriverDashboard() {
     setMessage('');
 
     try {
-      const result = await queueAwareCheckOut();
+      const result = await queueAwareCheckOut(currentCheckIn?.id);
 
       if (result.status === 'synced') {
         setCurrentCheckIn(null);

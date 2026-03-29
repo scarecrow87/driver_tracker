@@ -14,11 +14,27 @@ export async function queueAwareCheckIn(payload: {
   latitude?: number;
   longitude?: number;
 }): Promise<OfflineActionResult<unknown>> {
-  return queueAwareMutation('checkin', '/api/checkin', payload);
+  return queueAwareMutation('checkin', '/api/checkin', {
+    ...payload,
+    idempotencyKey: newIdempotencyKey(),
+  });
 }
 
-export async function queueAwareCheckOut(): Promise<OfflineActionResult<unknown>> {
-  return queueAwareMutation('checkout', '/api/checkout', {});
+export async function queueAwareCheckOut(
+  checkInId?: string
+): Promise<OfflineActionResult<unknown>> {
+  return queueAwareMutation('checkout', '/api/checkout', {
+    idempotencyKey: newIdempotencyKey(),
+    checkInId,
+  });
+}
+
+function newIdempotencyKey() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `idem-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 async function queueAwareMutation(
@@ -32,6 +48,7 @@ async function queueAwareMutation(
     try {
       const response = await fetch(url, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
@@ -89,11 +106,12 @@ export async function processOfflineQueue(): Promise<{ synced: number; failed: n
     try {
       const response = await fetch(url, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(item.payload),
       });
 
-      if (response.ok || response.status === 409 || response.status === 404) {
+      if (response.ok) {
         await removeQueuedAction(item.id);
         synced += 1;
       } else {

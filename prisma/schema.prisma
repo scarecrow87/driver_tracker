@@ -62,7 +62,9 @@ model CheckIn {
   location     Location  @relation(fields: [locationId], references: [id])
   locationId   String
   checkInTime  DateTime  @default(now())
+  checkInRequestKey String? @unique
   checkOutTime DateTime?
+  checkOutRequestKey String? @unique
   latitude     Float?
   longitude    Float?
   alertSent    Boolean   @default(false)
