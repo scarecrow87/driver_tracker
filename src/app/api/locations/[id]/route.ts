@@ -9,6 +9,8 @@ const updateSchema = z.object({
   name: z.string().min(1).optional(),
   address: z.string().optional(),
   isActive: z.boolean().optional(),
+  latitude: z.number().nullable().optional(),
+  longitude: z.number().nullable().optional(),
 });
 
 // PUT /api/locations/[id] – update a location (admin only)
@@ -30,7 +32,9 @@ export async function PUT(
   try {
     const updateData: Record<string, unknown> = { ...parsed.data };
 
-    if ('address' in parsed.data) {
+    const hasManualCoords = 'latitude' in parsed.data || 'longitude' in parsed.data;
+
+    if ('address' in parsed.data && !hasManualCoords) {
       if (parsed.data.address) {
         const coords = await geocodeAddress(parsed.data.address);
         if (coords) {

@@ -65,7 +65,7 @@ interface Stats {
   totalCheckIns: number;
 }
 
-type ActiveTab = 'overview' | 'locations' | 'users' | 'map' | 'settings';
+type ActiveTab = 'overview' | 'locations' | 'users' | 'map' | 'history' | 'settings';
 
 const DriverMap = dynamic(() => import('@/components/DriverMap'), { ssr: false });
 
@@ -78,9 +78,24 @@ export default function AdminDashboard() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [users, setUsers] = useState<User[]>([]);
 
+  // History tab state
+  const [historyData, setHistoryData] = useState<CheckIn[]>([]);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyLimit] = useState(25);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const [historyFilter, setHistoryFilter] = useState({
+    driverId: '',
+    from: '',
+    to: '',
+    status: 'all',
+  });
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   // Location form state
-  const [locationForm, setLocationForm] = useState({ name: '', address: '', isActive: true });
+  const [locationForm, setLocationForm] = useState({ name: '', address: '', latitude: '', longitude: '', isActive: true });
   const [editingLocation, setEditingLocation] = useState<Location | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
 
   // User form state
   const [userForm, setUserForm] = useState({
@@ -162,6 +177,30 @@ export default function AdminDashboard() {
     if (res.ok) setUsers(await res.json());
   }
 
+  async function fetchHistory(page = historyPage) {
+    setHistoryLoading(true);
+    const params = new URLSearchParams({
+      includeLocation: 'true',
+      includeDriver: 'true',
+      page: String(page),
+      limit: String(historyLimit),
+    });
+    if (historyFilter.driverId) params.set('driverId', historyFilter.driverId);
+    if (historyFilter.from) params.set('from', historyFilter.from);
+    if (historyFilter.to) params.set('to', historyFilter.to);
+    if (historyFilter.status !== 'all') params.set('status', historyFilter.status);
+
+    const res = await fetch(`/api/checkins?${params}`);
+    if (res.ok) {
+      const result = await res.json();
+      setHistoryData(result.data);
+      setHistoryTotal(result.total);
+      setHistoryPage(result.page);
+      setHistoryTotalPages(result.totalPages);
+    }
+    setHistoryLoading(false);
+  }
+
   async function fetchNotificationSettings() {
     const res = await fetch('/api/admin/settings/notifications');
     if (!res.ok) return;
@@ -219,27 +258,43 @@ export default function AdminDashboard() {
     setFormMessage('');
 
     if (editingLocation) {
+      const payload: Record<string, unknown> = { ...locationForm };
+      if (payload.latitude !== '' && payload.longitude !== '') {
+        payload.latitude = parseFloat(payload.latitude as string);
+        payload.longitude = parseFloat(payload.longitude as string);
+      } else {
+        delete payload.latitude;
+        delete payload.longitude;
+      }
       const res = await fetch(`/api/locations/${editingLocation.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(locationForm),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         setFormMessage('Location updated!');
         setEditingLocation(null);
-        setLocationForm({ name: '', address: '', isActive: true });
+        setLocationForm({ name: '', address: '', latitude: '', longitude: '', isActive: true });
         fetchLocations();
         fetchStats();
       }
     } else {
+      const payload: Record<string, unknown> = { ...locationForm };
+      if (payload.latitude !== '' && payload.longitude !== '') {
+        payload.latitude = parseFloat(payload.latitude as string);
+        payload.longitude = parseFloat(payload.longitude as string);
+      } else {
+        delete payload.latitude;
+        delete payload.longitude;
+      }
       const res = await fetch('/api/locations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(locationForm),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         setFormMessage('Location created!');
-        setLocationForm({ name: '', address: '', isActive: true });
+        setLocationForm({ name: '', address: '', latitude: '', longitude: '', isActive: true });
         fetchLocations();
         fetchStats();
       }
@@ -329,6 +384,7 @@ export default function AdminDashboard() {
           'locations',
           'users',
           'map',
+          'history',
           ...(session?.user?.role === 'SUPERUSER' ? (['settings'] as ActiveTab[]) : []),
         ] as ActiveTab[]).map((t) => (
           <button
@@ -467,6 +523,57 @@ export default function AdminDashboard() {
                     placeholder="123 Main St, City, ST"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Coordinates</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={locationForm.latitude}
+                      onChange={(e) => setLocationForm({ ...locationForm, latitude: e.target.value })}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Latitude"
+                    />
+                    <input
+                      type="text"
+                      value={locationForm.longitude}
+                      onChange={(e) => setLocationForm({ ...locationForm, longitude: e.target.value })}
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Longitude"
+                    />
+                    <button
+                      type="button"
+                      disabled={lookupLoading || !locationForm.address}
+                      onClick={async () => {
+                        setLookupLoading(true);
+                        setFormMessage('');
+                        try {
+                          const res = await fetch('/api/locations/geocode', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ address: locationForm.address }),
+                          });
+                          if (res.ok) {
+                            const coords = await res.json();
+                            setLocationForm((prev) => ({
+                              ...prev,
+                              latitude: String(coords.latitude),
+                              longitude: String(coords.longitude),
+                            }));
+                            setFormMessage('Coordinates found!');
+                          } else {
+                            setFormMessage('Could not geocode address.');
+                          }
+                        } catch {
+                          setFormMessage('Lookup failed.');
+                        }
+                        setLookupLoading(false);
+                      }}
+                      className="shrink-0 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm disabled:opacity-50"
+                    >
+                      {lookupLoading ? '...' : 'Lookup'}
+                    </button>
+                  </div>
+                </div>
                 <label className="flex items-center gap-2 text-sm text-gray-700">
                   <input
                     type="checkbox"
@@ -487,7 +594,7 @@ export default function AdminDashboard() {
                       type="button"
                       onClick={() => {
                         setEditingLocation(null);
-                        setLocationForm({ name: '', address: '', isActive: true });
+                        setLocationForm({ name: '', address: '', latitude: '', longitude: '', isActive: true });
                       }}
                       className="px-4 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
                     >
@@ -496,7 +603,7 @@ export default function AdminDashboard() {
                   )}
                 </div>
                 {formMessage && (
-                  <p className="text-sm text-green-600 font-medium">{formMessage}</p>
+                  <p className={`text-sm font-medium ${formMessage.includes('Could not') || formMessage.includes('failed') ? 'text-red-600' : 'text-green-600'}`}>{formMessage}</p>
                 )}
               </form>
             </div>
@@ -512,6 +619,9 @@ export default function AdminDashboard() {
                       {loc.address && (
                         <p className="text-xs text-gray-500">{loc.address}</p>
                       )}
+                      {loc.latitude != null && loc.longitude != null && (
+                        <p className="text-xs text-gray-400">{loc.latitude.toFixed(4)}, {loc.longitude.toFixed(4)}</p>
+                      )}
                       <span className={`text-xs px-2 py-0.5 rounded-full ${loc.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
                         {loc.isActive ? 'Active' : 'Inactive'}
                       </span>
@@ -520,7 +630,7 @@ export default function AdminDashboard() {
                       <button
                         onClick={() => {
                           setEditingLocation(loc);
-                          setLocationForm({ name: loc.name, address: loc.address || '', isActive: loc.isActive });
+                          setLocationForm({ name: loc.name, address: loc.address || '', latitude: loc.latitude != null ? String(loc.latitude) : '', longitude: loc.longitude != null ? String(loc.longitude) : '', isActive: loc.isActive });
                           setFormMessage('');
                         }}
                         className="text-xs text-blue-600 hover:underline"
@@ -747,6 +857,251 @@ export default function AdminDashboard() {
                 <DriverMap points={latestLocations} />
               ) : (
                 <p className="text-sm text-gray-500">No driver locations available yet.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* History Tab */}
+        {tab === 'history' && (
+          <div className="space-y-4">
+            {/* Filters */}
+            <div className="bg-white rounded-lg shadow p-4">
+              <div className="flex flex-wrap items-end gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Driver</label>
+                  <select
+                    value={historyFilter.driverId}
+                    onChange={(e) => setHistoryFilter({ ...historyFilter, driverId: e.target.value })}
+                    className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">All Drivers</option>
+                    {users.filter((u) => u.role === 'DRIVER').map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">From</label>
+                  <input
+                    type="date"
+                    value={historyFilter.from}
+                    onChange={(e) => setHistoryFilter({ ...historyFilter, from: e.target.value })}
+                    className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                  <input
+                    type="date"
+                    value={historyFilter.to}
+                    onChange={(e) => setHistoryFilter({ ...historyFilter, to: e.target.value })}
+                    className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                  <select
+                    value={historyFilter.status}
+                    onChange={(e) => setHistoryFilter({ ...historyFilter, status: e.target.value })}
+                    className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All</option>
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+                <button
+                  onClick={() => { setHistoryPage(1); fetchHistory(1); }}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm font-medium"
+                >
+                  Search
+                </button>
+                <button
+                  onClick={() => {
+                    setHistoryFilter({ driverId: '', from: '', to: '', status: 'all' });
+                    setHistoryPage(1);
+                    setHistoryData([]);
+                    setHistoryTotal(0);
+                  }}
+                  className="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 text-sm font-medium"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            {/* Results */}
+            <div className="bg-white rounded-lg shadow">
+              <div className="p-4 border-b flex justify-between items-center">
+                <h2 className="font-semibold text-gray-800">
+                  Driver History
+                  {historyTotal > 0 && (
+                    <span className="text-sm font-normal text-gray-500 ml-2">
+                      ({historyTotal} record{historyTotal !== 1 ? 's' : ''})
+                    </span>
+                  )}
+                </h2>
+                {historyTotal > 0 && (
+                  <button
+                    onClick={() => {
+                      const params = new URLSearchParams({
+                        includeLocation: 'true',
+                        includeDriver: 'true',
+                        limit: String(historyTotal),
+                        page: '1',
+                      });
+                      if (historyFilter.driverId) params.set('driverId', historyFilter.driverId);
+                      if (historyFilter.from) params.set('from', historyFilter.from);
+                      if (historyFilter.to) params.set('to', historyFilter.to);
+                      if (historyFilter.status !== 'all') params.set('status', historyFilter.status);
+
+                      fetch(`/api/checkins?${params}`)
+                        .then((r) => r.json())
+                        .then((result) => {
+                          const rows = result.data || result;
+                          const header = 'Driver,Location,Check In,Check Out,Status\n';
+                          const csv = rows.map((ci: CheckIn) =>
+                            [
+                              `"${ci.driver?.name || ci.driverId}"`,
+                              `"${ci.location?.name || ci.locationId}"`,
+                              `"${formatDateTime(ci.checkInTime)}"`,
+                              `"${ci.checkOutTime ? formatDateTime(ci.checkOutTime) : 'Active'}"`,
+                              ci.checkOutTime ? 'Completed' : 'Active',
+                            ].join(',')
+                          ).join('\n');
+                          const blob = new Blob([header + csv], { type: 'text/csv' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = 'driver-history.csv';
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        });
+                    }}
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    Export CSV
+                  </button>
+                )}
+              </div>
+              <div className="overflow-x-auto">
+                {historyLoading ? (
+                  <div className="p-8 text-center text-gray-500">Loading...</div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left px-4 py-2 font-medium text-gray-600">Driver</th>
+                        <th className="text-left px-4 py-2 font-medium text-gray-600">Location</th>
+                        <th className="text-left px-4 py-2 font-medium text-gray-600">Check In</th>
+                        <th className="text-left px-4 py-2 font-medium text-gray-600">Check Out</th>
+                        <th className="text-left px-4 py-2 font-medium text-gray-600">GPS</th>
+                        <th className="text-left px-4 py-2 font-medium text-gray-600">Alert</th>
+                        <th className="text-left px-4 py-2 font-medium text-gray-600">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {historyData.map((ci) => (
+                        <tr key={ci.id}>
+                          <td className="px-4 py-3">{ci.driver?.name || ci.driverId}</td>
+                          <td className="px-4 py-3">{ci.location?.name || ci.locationId}</td>
+                          <td className="px-4 py-3">{formatDateTime(ci.checkInTime)}</td>
+                          <td className="px-4 py-3">
+                            {ci.checkOutTime ? formatDateTime(ci.checkOutTime) : '\u2014'}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-gray-500">
+                            {ci.latitude != null
+                              ? `${ci.latitude.toFixed(4)}, ${ci.longitude?.toFixed(4)}`
+                              : '\u2014'}
+                          </td>
+                          <td className="px-4 py-3">
+                            {ci.alertLevel === 1 && (
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">Alerted</span>
+                            )}
+                            {ci.alertLevel === 2 && (
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">Escalated</span>
+                            )}
+                            {(ci.alertLevel ?? 0) >= 3 && (
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">Urgent</span>
+                            )}
+                            {(ci.alertLevel ?? 0) === 0 && <span className="text-gray-400 text-xs">—</span>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                ci.checkOutTime
+                                  ? 'bg-gray-100 text-gray-600'
+                                  : 'bg-green-100 text-green-700'
+                              }`}
+                            >
+                              {ci.checkOutTime ? 'Completed' : 'Active'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                      {historyData.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
+                            {historyFilter.driverId || historyFilter.from || historyFilter.to || historyFilter.status !== 'all'
+                              ? 'No check-ins match your filters.'
+                              : 'Click "Search" to load driver history, or apply filters above.'}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {/* Pagination */}
+              {historyTotalPages > 1 && (
+                <div className="p-4 border-t flex items-center justify-between">
+                  <p className="text-sm text-gray-600">
+                    Page {historyPage} of {historyTotalPages}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { const p = historyPage - 1; setHistoryPage(p); fetchHistory(p); }}
+                      disabled={historyPage <= 1}
+                      className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    {Array.from({ length: Math.min(5, historyTotalPages) }, (_, i) => {
+                      let pageNum: number;
+                      if (historyTotalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (historyPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (historyPage >= historyTotalPages - 2) {
+                        pageNum = historyTotalPages - 4 + i;
+                      } else {
+                        pageNum = historyPage - 2 + i;
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => { setHistoryPage(pageNum); fetchHistory(pageNum); }}
+                          className={`px-3 py-1 text-sm border rounded-md ${
+                            historyPage === pageNum
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                    <button
+                      onClick={() => { const p = historyPage + 1; setHistoryPage(p); fetchHistory(p); }}
+                      disabled={historyPage >= historyTotalPages}
+                      className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

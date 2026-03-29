@@ -9,6 +9,8 @@ const createSchema = z.object({
   name: z.string().min(1),
   address: z.string().optional(),
   isActive: z.boolean().optional().default(true),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 });
 
 // GET /api/locations – list all locations (authenticated users)
@@ -42,11 +44,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const { latitude, longitude, ...rest } = parsed.data;
+  const hasManualCoords = latitude !== undefined && longitude !== undefined;
+
   const location = await prisma.location.create({
-    data: parsed.data,
+    data: hasManualCoords ? { ...rest, latitude, longitude } : rest,
   });
 
-  if (parsed.data.address) {
+  if (!hasManualCoords && parsed.data.address) {
     const coords = await geocodeAddress(parsed.data.address);
     if (coords) {
       await prisma.location.update({
