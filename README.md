@@ -32,12 +32,15 @@ A driver safety tracking Progressive Web App (PWA) built with Next.js, TypeScrip
 
    The app container automatically applies any pending database migrations on startup.
    Startup runs `prisma migrate deploy` with retry logic (configurable via `MIGRATION_MAX_RETRIES` and `MIGRATION_RETRY_DELAY_SECONDS`).
+   On a brand-new database, startup also auto-seeds default users and sample locations once (can be disabled with `AUTO_SEED_ON_EMPTY_DB=false`).
 
-3. **Seed initial data** (superuser + admin + driver users, sample locations)
+3. **(Optional) Re-seed initial data manually**
 
    ```bash
-   docker exec -it driver_tracker_app npx ts-node --compiler-options '{"module":"CommonJS"}' prisma/seed.ts
+   npx --yes -p tsx tsx prisma/seed.ts
    ```
+
+   Use this only when you want to re-apply the default users/locations intentionally.
 
 4. **Open the app**
 
@@ -120,10 +123,77 @@ If you are using Docker, the container startup script applies pending migrations
 | `NEXTAUTH_SECRET` | Secret for JWT signing |
 | `NEXTAUTH_URL` | App base URL |
 | `SETTINGS_ENCRYPTION_KEY` | 32-byte key (raw or base64) used to encrypt notification provider secrets stored in DB |
+| `AUTO_SEED_ON_EMPTY_DB` | Optional startup flag to seed defaults when no users exist (default `true`) |
 | `MIGRATION_MAX_RETRIES` | Optional Docker startup retry count for `prisma migrate deploy` (default `10`) |
 | `MIGRATION_RETRY_DELAY_SECONDS` | Optional wait between migration retries in seconds (default `5`) |
 
 Optional fallback provider env vars (used only if superuser DB settings are empty): `EMAIL_TENANT_ID`, `EMAIL_CLIENT_ID`, `EMAIL_CLIENT_SECRET`, `EMAIL_FROM`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`.
+
+## Database Backup and Restore
+
+Backups are full PostgreSQL dumps stored locally in `./backups` by default.
+
+### How First Startup Works
+
+On a brand-new setup, the startup flow is:
+
+1. The `db` container starts and becomes healthy.
+2. The `app` container runs `prisma migrate deploy`.
+3. If `AUTO_SEED_ON_EMPTY_DB=true` and the `User` table is empty, the app seeds the default superuser, admin, driver, and sample locations.
+4. The Next.js server starts.
+
+This auto-seed happens only when no users exist.
+
+If you are restoring a real backup onto a new server, you can still start the stack normally first. If the empty database gets auto-seeded before restore, that is acceptable because the restore scripts drop and recreate the `public` schema before importing the backup. The restored data replaces the temporary seeded defaults.
+
+If you want to avoid even temporary default records on a restore target, set `AUTO_SEED_ON_EMPTY_DB=false` before first startup, restore the backup, and then start or restart the app.
+
+### Create a Backup
+
+```bash
+sh ./scripts/backup-db.sh
+```
+
+```powershell
+./scripts/backup-db.ps1
+```
+
+### Restore from Backup
+
+```bash
+sh ./scripts/restore-db.sh ./backups/driver_tracker_YYYYMMDD_HHMMSS.sql.gz
+```
+
+```powershell
+./scripts/restore-db.ps1 -BackupFile .\backups\driver_tracker_YYYYMMDD_HHMMSS.sql.gz
+```
+
+The restore scripts reset the `public` schema and then import the selected dump.
+
+Typical restore workflow:
+
+1. Make sure the Docker stack is running and the `db` container is healthy.
+2. Run the restore command with the chosen `.sql.gz` file.
+3. Confirm the destructive prompt.
+4. After restore completes, restart the app container if you want a clean reconnect cycle:
+
+```bash
+docker compose restart app
+```
+
+5. Log in and verify critical data.
+
+### Server Move Runbook
+
+1. On source server, create a backup with `sh ./scripts/backup-db.sh` or `./scripts/backup-db.ps1`.
+2. Copy the generated `.sql.gz` file to the new server.
+3. On the new server, decide whether to keep first-start auto-seed enabled:
+   - Keep it enabled for the simplest setup. Temporary seeded records will be removed by restore.
+   - Disable it with `AUTO_SEED_ON_EMPTY_DB=false` if you want the new server to stay empty until restore.
+4. Start the stack with `docker compose up -d`.
+5. Restore the backup with `sh ./scripts/restore-db.sh <file>` or `./scripts/restore-db.ps1 -BackupFile <file>`.
+6. Restart the app container with `docker compose restart app`.
+7. Validate app login and critical flows (superuser login, admin dashboard, driver check-in/out, notification settings access).
 
 ## Architecture
 

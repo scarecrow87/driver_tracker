@@ -40,3 +40,8 @@ next-env.d.ts
 /public/sw.js.map
 /public/workbox-*.js
 /public/workbox-*.js.map
+
+# local backups
+/backups/
+*.sql
+*.sql.gz

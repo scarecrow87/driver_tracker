@@ -24,4 +24,11 @@ while [ "$attempt" -le "$MAX_RETRIES" ]; do
 	sleep "$SLEEP_SECONDS"
 done
 
+if [ "${AUTO_SEED_ON_EMPTY_DB:-true}" = "true" ]; then
+	echo "Checking whether first-start seed is needed..."
+	node prisma/auto-seed.js
+else
+	echo "AUTO_SEED_ON_EMPTY_DB is disabled. Skipping first-start seed check."
+fi
+
 exec node server.js
