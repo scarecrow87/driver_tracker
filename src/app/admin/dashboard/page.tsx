@@ -8,6 +8,8 @@ interface Location {
   id: string;
   name: string;
   address?: string;
+  latitude?: number;
+  longitude?: number;
   isActive: boolean;
 }
 
@@ -136,16 +138,16 @@ export default function AdminDashboard() {
 
     const rows: CheckIn[] = await res.json();
     const points = rows
-      .filter((ci) => ci.latitude != null && ci.longitude != null)
       .map((ci) => ({
         id: ci.id,
         driverName: ci.driver?.name || ci.driverId,
         locationName: ci.location?.name,
-        latitude: ci.latitude as number,
-        longitude: ci.longitude as number,
+        latitude: ci.latitude ?? ci.location?.latitude,
+        longitude: ci.longitude ?? ci.location?.longitude,
         checkInTime: ci.checkInTime,
         checkOutTime: ci.checkOutTime,
-      }));
+      }))
+      .filter((p) => p.latitude != null && p.longitude != null) as MapPoint[];
 
     setLatestLocations(points);
   }
@@ -744,7 +746,7 @@ export default function AdminDashboard() {
               {latestLocations.length > 0 ? (
                 <DriverMap points={latestLocations} />
               ) : (
-                <p className="text-sm text-gray-500">No driver GPS locations available yet.</p>
+                <p className="text-sm text-gray-500">No driver locations available yet.</p>
               )}
             </div>
           </div>

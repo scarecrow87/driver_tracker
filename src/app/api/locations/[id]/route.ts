@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, isAdminOrSuperuser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { geocodeAddress } from '@/lib/geocode';
 import { z } from 'zod';
 
 const updateSchema = z.object({
@@ -27,9 +28,24 @@ export async function PUT(
   }
 
   try {
+    const updateData: Record<string, unknown> = { ...parsed.data };
+
+    if ('address' in parsed.data) {
+      if (parsed.data.address) {
+        const coords = await geocodeAddress(parsed.data.address);
+        if (coords) {
+          updateData.latitude = coords.latitude;
+          updateData.longitude = coords.longitude;
+        }
+      } else {
+        updateData.latitude = null;
+        updateData.longitude = null;
+      }
+    }
+
     const location = await prisma.location.update({
       where: { id: params.id },
-      data: parsed.data,
+      data: updateData,
     });
     return NextResponse.json(location);
   } catch {
