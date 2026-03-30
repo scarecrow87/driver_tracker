@@ -3,6 +3,7 @@
 import { useSession, signOut } from 'next-auth/react';
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 
 interface Location {
   id: string;
@@ -443,7 +444,14 @@ export default function AdminDashboard() {
                   <tbody className="divide-y divide-gray-100">
                     {checkIns.map((ci) => (
                       <tr key={ci.id}>
-                        <td className="px-4 py-3">{ci.driver?.name || ci.driverId}</td>
+                        <td className="px-4 py-3">
+                          <Link
+                            href={`/admin/drivers/${ci.driverId}`}
+                            className="text-blue-600 hover:underline"
+                          >
+                            {ci.driver?.name || ci.driverId}
+                          </Link>
+                        </td>
                         <td className="px-4 py-3">{ci.location?.name || ci.locationId}</td>
                         <td className="px-4 py-3">{formatDateTime(ci.checkInTime)}</td>
                         <td className="px-4 py-3">
@@ -795,6 +803,14 @@ export default function AdminDashboard() {
                     <div className="flex gap-2 ml-2">
                       {(session?.user?.role === 'SUPERUSER' || user.role !== 'SUPERUSER') && (
                         <>
+                          {user.role === 'DRIVER' && (
+                            <Link
+                              href={`/admin/drivers/${user.id}`}
+                              className="text-xs text-green-600 hover:underline"
+                            >
+                              History
+                            </Link>
+                          )}
                           <button
                             onClick={() => {
                               setEditingUser(user);
@@ -1004,7 +1020,14 @@ export default function AdminDashboard() {
                     <tbody className="divide-y divide-gray-100">
                       {historyData.map((ci) => (
                         <tr key={ci.id}>
-                          <td className="px-4 py-3">{ci.driver?.name || ci.driverId}</td>
+                          <td className="px-4 py-3">
+                            <Link
+                              href={`/admin/drivers/${ci.driverId}`}
+                              className="text-blue-600 hover:underline"
+                            >
+                              {ci.driver?.name || ci.driverId}
+                            </Link>
+                          </td>
                           <td className="px-4 py-3">{ci.location?.name || ci.locationId}</td>
                           <td className="px-4 py-3">{formatDateTime(ci.checkInTime)}</td>
                           <td className="px-4 py-3">
