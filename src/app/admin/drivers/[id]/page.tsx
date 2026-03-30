@@ -23,6 +23,8 @@ interface CheckInRecord {
   longitude?: number;
   alertLevel?: number;
   location?: { id: string; name: string; address?: string };
+  isExtendedStay?: boolean;
+  extendedStayReason?: string;
 }
 
 export default function DriverHistoryPage() {
@@ -360,15 +362,22 @@ export default function DriverHistoryPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            ci.checkOutTime
-                              ? 'bg-gray-100 text-gray-600'
-                              : 'bg-green-100 text-green-700'
-                          }`}
-                        >
-                          {ci.checkOutTime ? 'Completed' : 'Active'}
-                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              ci.checkOutTime
+                                ? 'bg-gray-100 text-gray-600'
+                                : 'bg-green-100 text-green-700'
+                            }`}
+                          >
+                            {ci.checkOutTime ? 'Completed' : 'Active'}
+                          </span>
+                          {ci.isExtendedStay && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700" title={ci.extendedStayReason || ''}>
+                              Extended
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

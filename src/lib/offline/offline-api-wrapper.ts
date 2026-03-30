@@ -13,6 +13,8 @@ export async function queueAwareCheckIn(payload: {
   locationId: string;
   latitude?: number;
   longitude?: number;
+  extendedStay?: boolean;
+  extendedStayReason?: string;
 }): Promise<OfflineActionResult<unknown>> {
   return queueAwareMutation('checkin', '/api/checkin', {
     ...payload,

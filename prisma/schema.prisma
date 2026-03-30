@@ -70,6 +70,9 @@ model CheckIn {
   latitude     Float?
   longitude    Float?
   alertLevel   Int       @default(0)
+  isExtendedStay     Boolean   @default(false)
+  extendedStayReason String?
+  extendedStayAt     DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }

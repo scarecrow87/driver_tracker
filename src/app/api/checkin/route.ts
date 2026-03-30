@@ -9,6 +9,8 @@ const checkInSchema = z.object({
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   idempotencyKey: z.string().optional(),
+  extendedStay: z.boolean().optional(),
+  extendedStayReason: z.string().min(1).optional(),
 });
 
 // POST /api/checkin – create a check-in (driver only)
@@ -30,6 +32,13 @@ export async function POST(req: NextRequest) {
   const parsed = checkInSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  if (parsed.data.extendedStay && !parsed.data.extendedStayReason) {
+    return NextResponse.json(
+      { error: 'A reason is required when selecting extended stay' },
+      { status: 400 }
+    );
   }
 
   if (parsed.data.idempotencyKey) {
@@ -80,6 +89,9 @@ export async function POST(req: NextRequest) {
       latitude: parsed.data.latitude,
       longitude: parsed.data.longitude,
       checkInRequestKey: parsed.data.idempotencyKey,
+      isExtendedStay: parsed.data.extendedStay ?? false,
+      extendedStayReason: parsed.data.extendedStay ? parsed.data.extendedStayReason : null,
+      extendedStayAt: parsed.data.extendedStay ? new Date() : null,
     },
     include: { location: true },
   });

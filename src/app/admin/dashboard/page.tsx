@@ -35,6 +35,8 @@ interface CheckIn {
   alertLevel?: number;
   location?: Location;
   driver?: { id: string; name: string; email: string };
+  isExtendedStay?: boolean;
+  extendedStayReason?: string;
 }
 
 interface MapPoint {
@@ -464,26 +466,33 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-4 py-3">
                           {ci.alertLevel === 1 && (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">⚠ Alerted</span>
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">&#x26A0; Alerted</span>
                           )}
                           {ci.alertLevel === 2 && (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">🔶 Escalated</span>
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700">&#x1F536; Escalated</span>
                           )}
                           {(ci.alertLevel ?? 0) >= 3 && (
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">🔴 Urgent</span>
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">&#x1F534; Urgent</span>
                           )}
-                          {(ci.alertLevel ?? 0) === 0 && <span className="text-gray-400 text-xs">—</span>}
+                          {(ci.alertLevel ?? 0) === 0 && <span className="text-gray-400 text-xs">\u2014</span>}
                         </td>
                         <td className="px-4 py-3">
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              ci.checkOutTime
-                                ? 'bg-gray-100 text-gray-600'
-                                : 'bg-green-100 text-green-700'
-                            }`}
-                          >
-                            {ci.checkOutTime ? 'Done' : 'Active'}
-                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                ci.checkOutTime
+                                  ? 'bg-gray-100 text-gray-600'
+                                  : 'bg-green-100 text-green-700'
+                              }`}
+                            >
+                              {ci.checkOutTime ? 'Done' : 'Active'}
+                            </span>
+                            {ci.isExtendedStay && (
+                              <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700" title={ci.extendedStayReason || ''}>
+                                Extended
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1048,18 +1057,25 @@ export default function AdminDashboard() {
                             {(ci.alertLevel ?? 0) >= 3 && (
                               <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">Urgent</span>
                             )}
-                            {(ci.alertLevel ?? 0) === 0 && <span className="text-gray-400 text-xs">—</span>}
+                            {(ci.alertLevel ?? 0) === 0 && <span className="text-gray-400 text-xs">\u2014</span>}
                           </td>
                           <td className="px-4 py-3">
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                ci.checkOutTime
-                                  ? 'bg-gray-100 text-gray-600'
-                                  : 'bg-green-100 text-green-700'
-                              }`}
-                            >
-                              {ci.checkOutTime ? 'Completed' : 'Active'}
-                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              <span
+                                className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  ci.checkOutTime
+                                    ? 'bg-gray-100 text-gray-600'
+                                    : 'bg-green-100 text-green-700'
+                                }`}
+                              >
+                                {ci.checkOutTime ? 'Completed' : 'Active'}
+                              </span>
+                              {ci.isExtendedStay && (
+                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700" title={ci.extendedStayReason || ''}>
+                                  Extended
+                                </span>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
