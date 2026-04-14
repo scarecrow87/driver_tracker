@@ -116,3 +116,6 @@ export async function GET() {
 
   return NextResponse.json(checkIn);
 }
+
+// See docs/twilio-sms-testing.md for Twilio sandbox/test credential usage and magic numbers reference.
+// Official docs: https://www.twilio.com/docs/iam/test-credentials

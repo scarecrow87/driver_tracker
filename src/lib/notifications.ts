@@ -1,3 +1,7 @@
+// See docs/twilio-sms-testing.md for Twilio sandbox/test credential usage and magic numbers reference.
+// Official docs: https://www.twilio.com/docs/iam/test-credentials
+// Example usage and safe testing patterns are documented in the project README and docs/twilio-sms-testing.md
+
 /**
  * Notification helpers for email (Microsoft Graph) and SMS (Twilio).
  * These are placeholder implementations – wire up real credentials via env vars.

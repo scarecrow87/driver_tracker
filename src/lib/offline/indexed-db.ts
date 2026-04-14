@@ -1,3 +1,6 @@
+// See docs/twilio-sms-testing.md for Twilio sandbox/test credential usage and magic numbers reference.
+// Official docs: https://www.twilio.com/docs/iam/test-credentials
+
 import { DBSchema, IDBPDatabase, openDB } from 'idb';
 
 export interface CachedLocation {

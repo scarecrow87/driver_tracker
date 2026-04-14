@@ -80,3 +80,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(updated);
 }
+
+// See docs/twilio-sms-testing.md for Twilio sandbox/test credential usage and magic numbers reference.
+// Official docs: https://www.twilio.com/docs/iam/test-credentials

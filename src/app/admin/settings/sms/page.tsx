@@ -1,6 +1,9 @@
 import React from 'react';
 import { prisma } from '@/lib/prisma';
 
+// See docs/twilio-sms-testing.md for Twilio sandbox/test credential usage and magic numbers reference.
+// Official docs: https://www.twilio.com/docs/iam/test-credentials
+
 // Placeholder for Superuser SMS settings page
 export default async function SmsSettingsPage() {
   // Fetch current settings (in real app, use API call or server action)

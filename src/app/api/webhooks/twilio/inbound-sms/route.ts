@@ -10,6 +10,9 @@ function parseSmsBody(body: string) {
   return { command: match[1].toUpperCase(), locationCode: match[2] };
 }
 
+// See docs/twilio-sms-testing.md for Twilio sandbox/test credential usage and magic numbers reference.
+// Official docs: https://www.twilio.com/docs/iam/test-credentials
+
 export async function POST(req: NextRequest) {
     // Failsafe: limit number of inbound SMS check-ins/check-outs per driver per day
     const MAX_SMS_ACTIONS_PER_DAY = 4; // configurable, e.g. 4 per day

@@ -1,3 +1,6 @@
+// See docs/twilio-sms-testing.md for Twilio sandbox/test credential usage and magic numbers reference.
+// Official docs: https://www.twilio.com/docs/iam/test-credentials
+
 import { getOfflineDb, QueuedAction, QueueActionType } from './indexed-db';
 
 const MAX_QUEUE_ITEMS = 200;
