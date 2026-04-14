@@ -35,6 +35,15 @@ const ESCALATION_TIERS = [
 ] as const;
 
 /**
+ * Extended stay escalation tiers – 3x the normal thresholds.
+ * A driver who declared extended stay gets more time before alerts fire.
+ */
+const EXTENDED_ESCALATION_TIERS = ESCALATION_TIERS.map((tier) => ({
+  ...tier,
+  hoursThreshold: tier.hoursThreshold * 3,
+}));
+
+/**
  * Start the background cron job that checks for overdue check-ins.
  * Runs every 15 minutes. Safe to call multiple times (only starts once).
  */
@@ -58,6 +67,7 @@ export function startCronJob(): void {
       });
 
       // Process each escalation tier in order (lowest to highest)
+      // Normal check-ins use standard tiers, extended stays use 3x thresholds
       for (const tier of ESCALATION_TIERS) {
         const threshold = new Date(Date.now() - tier.hoursThreshold * 60 * 60 * 1000);
 
@@ -66,6 +76,7 @@ export function startCronJob(): void {
             checkOutTime: null,
             checkInTime: { lt: threshold },
             alertLevel: tier.currentLevel,
+            isExtendedStay: false,
           },
           include: {
             driver: true,
@@ -75,42 +86,96 @@ export function startCronJob(): void {
 
         if (overdueCheckIns.length === 0) {
           console.log(`[Cron] Tier ${tier.currentLevel}: no check-ins to escalate.`);
-          continue;
-        }
+        } else {
+          console.log(`[Cron] Tier ${tier.currentLevel}: ${overdueCheckIns.length} check-in(s) to escalate.`);
+          for (const checkIn of overdueCheckIns) {
+            const minutes = Math.floor(
+              (Date.now() - checkIn.checkInTime.getTime()) / 1000 / 60
+            );
+            const message = tier.buildMessage(
+              checkIn.driver.name,
+              checkIn.location.name,
+              minutes
+            );
 
-        console.log(`[Cron] Tier ${tier.currentLevel}: ${overdueCheckIns.length} check-in(s) to escalate.`);
+            console.log(`[Cron] ${tier.emailSubject}: ${message}`);
 
-        for (const checkIn of overdueCheckIns) {
-          const minutes = Math.floor(
-            (Date.now() - checkIn.checkInTime.getTime()) / 1000 / 60
-          );
-          const message = tier.buildMessage(
-            checkIn.driver.name,
-            checkIn.location.name,
-            minutes
-          );
-
-          console.log(`[Cron] ${tier.emailSubject}: ${message}`);
-
-          for (const recipient of recipients) {
-            if (recipient.adminEmail) {
-              await sendEmailAlert(
-                recipient.adminEmail,
-                tier.emailSubject,
-                message,
-                providerConfig
-              );
+            for (const recipient of recipients) {
+              if (recipient.adminEmail) {
+                await sendEmailAlert(
+                  recipient.adminEmail,
+                  tier.emailSubject,
+                  message,
+                  providerConfig
+                );
+              }
+              if (recipient.adminPhone) {
+                await sendSmsAlert(recipient.adminPhone, message, providerConfig);
+              }
             }
-            if (recipient.adminPhone) {
-              await sendSmsAlert(recipient.adminPhone, message, providerConfig);
-            }
+
+            // Advance the alert level for this check-in
+            await prisma.checkIn.update({
+              where: { id: checkIn.id },
+              data: { alertLevel: tier.currentLevel + 1 },
+            });
           }
+        }
+      }
 
-          // Advance the alert level for this check-in
-          await prisma.checkIn.update({
-            where: { id: checkIn.id },
-            data: { alertLevel: tier.currentLevel + 1 },
-          });
+      // Extended stay check-ins use 3x thresholds
+      for (const tier of EXTENDED_ESCALATION_TIERS) {
+        const threshold = new Date(Date.now() - tier.hoursThreshold * 60 * 60 * 1000);
+
+        const overdueCheckIns = await prisma.checkIn.findMany({
+          where: {
+            checkOutTime: null,
+            checkInTime: { lt: threshold },
+            alertLevel: tier.currentLevel,
+            isExtendedStay: true,
+          },
+          include: {
+            driver: true,
+            location: true,
+          },
+        });
+
+        if (overdueCheckIns.length === 0) {
+          console.log(`[Cron] Extended Tier ${tier.currentLevel}: no check-ins to escalate.`);
+        } else {
+          console.log(`[Cron] Extended Tier ${tier.currentLevel}: ${overdueCheckIns.length} check-in(s) to escalate.`);
+          for (const checkIn of overdueCheckIns) {
+            const minutes = Math.floor(
+              (Date.now() - checkIn.checkInTime.getTime()) / 1000 / 60
+            );
+            const message = tier.buildMessage(
+              checkIn.driver.name,
+              checkIn.location.name,
+              minutes
+            );
+
+            console.log(`[Cron] ${tier.emailSubject}: ${message}`);
+
+            for (const recipient of recipients) {
+              if (recipient.adminEmail) {
+                await sendEmailAlert(
+                  recipient.adminEmail,
+                  tier.emailSubject,
+                  message,
+                  providerConfig
+                );
+              }
+              if (recipient.adminPhone) {
+                await sendSmsAlert(recipient.adminPhone, message, providerConfig);
+              }
+            }
+
+            // Advance the alert level for this check-in
+            await prisma.checkIn.update({
+              where: { id: checkIn.id },
+              data: { alertLevel: tier.currentLevel + 1 },
+            });
+          }
         }
       }
     } catch (err) {

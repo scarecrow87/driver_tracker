@@ -26,6 +26,8 @@ interface CheckIn {
   latitude?: number;
   longitude?: number;
   location?: Location;
+  isExtendedStay?: boolean;
+  extendedStayReason?: string;
 }
 
 export default function DriverDashboard() {
@@ -42,6 +44,9 @@ export default function DriverDashboard() {
   const [messageTone, setMessageTone] = useState<'success' | 'warning' | 'error'>('warning');
   const [lastQueuedAction, setLastQueuedAction] = useState<'checkin' | 'checkout' | null>(null);
   const [shareGps, setShareGps] = useState(false);
+  const [extendedStay, setExtendedStay] = useState(false);
+  const [extendedStayReason, setExtendedStayReason] = useState('');
+  const [extending, setExtending] = useState(false);
 
   // Fetch locations and recent check-ins on mount
   useEffect(() => {
@@ -194,10 +199,62 @@ export default function DriverDashboard() {
     await setMeta('shareGps', checked ? 'true' : 'false');
   }
 
+  async function handleToggleExtendedStay() {
+    if (!currentCheckIn) return;
+
+    if (!currentCheckIn.isExtendedStay && !extendedStayReason.trim()) {
+      setMessageTone('error');
+      setMessage('Please provide a reason for extended stay');
+      return;
+    }
+
+    setExtending(true);
+    setMessage('');
+
+    try {
+      const res = await fetch(`/api/checkin/${currentCheckIn.id}/extend`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          extendedStay: !currentCheckIn.isExtendedStay,
+          reason: !currentCheckIn.isExtendedStay ? extendedStayReason.trim() : undefined,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setCurrentCheckIn(data);
+        setExtendedStayReason('');
+        setMessageTone('success');
+        setMessage(
+          data.isExtendedStay
+            ? 'Extended stay declared. Alert thresholds have been raised.'
+            : 'Extended stay removed. Standard alert thresholds apply.'
+        );
+        fetchCheckIns();
+      } else {
+        const err = await res.json();
+        setMessageTone('error');
+        setMessage(err.error || 'Failed to update extended stay');
+      }
+    } catch {
+      setMessageTone('error');
+      setMessage('Failed to update extended stay');
+    }
+
+    setExtending(false);
+  }
+
   async function handleCheckIn() {
     if (!selectedLocation) {
       setMessageTone('error');
       setMessage('Please select a location');
+      return;
+    }
+
+    if (extendedStay && !extendedStayReason.trim()) {
+      setMessageTone('error');
+      setMessage('Please provide a reason for extended stay');
       return;
     }
 
@@ -226,6 +283,8 @@ export default function DriverDashboard() {
         locationId: selectedLocation,
         latitude,
         longitude,
+        extendedStay: extendedStay || undefined,
+        extendedStayReason: extendedStay ? extendedStayReason.trim() : undefined,
       });
 
       if (result.status === 'synced') {
@@ -328,13 +387,58 @@ export default function DriverDashboard() {
                   {currentCheckIn.longitude?.toFixed(5)}
                 </p>
               )}
-              <button
-                onClick={handleCheckOut}
-                disabled={loading}
-                className="mt-4 w-full bg-red-600 text-white py-2 rounded-md hover:bg-red-700 disabled:opacity-50 font-medium"
-              >
-                {loading ? 'Processing...' : 'Check Out'}
-              </button>
+              {currentCheckIn.isExtendedStay && (
+                <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
+                  <p className="text-sm font-medium text-amber-800">Extended Stay Active</p>
+                  {currentCheckIn.extendedStayReason && (
+                    <p className="text-sm text-amber-700 mt-1">
+                      Reason: {currentCheckIn.extendedStayReason}
+                    </p>
+                  )}
+                  <p className="text-xs text-amber-600 mt-1">
+                    Alert thresholds have been raised (6h/12h/24h)
+                  </p>
+                </div>
+              )}
+              <div className="mt-4 space-y-3">
+                {!currentCheckIn.isExtendedStay && (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Need to stay longer?
+                    </label>
+                    <input
+                      type="text"
+                      value={extendedStayReason}
+                      onChange={(e) => setExtendedStayReason(e.target.value)}
+                      placeholder="Reason for extended stay (e.g. vehicle breakdown)"
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                    <button
+                      onClick={handleToggleExtendedStay}
+                      disabled={extending || !extendedStayReason.trim()}
+                      className="w-full bg-amber-600 text-white py-2 rounded-md hover:bg-amber-700 disabled:opacity-50 font-medium"
+                    >
+                      {extending ? 'Processing...' : 'Declare Extended Stay'}
+                    </button>
+                  </div>
+                )}
+                {currentCheckIn.isExtendedStay && (
+                  <button
+                    onClick={handleToggleExtendedStay}
+                    disabled={extending}
+                    className="w-full bg-gray-600 text-white py-2 rounded-md hover:bg-gray-700 disabled:opacity-50 font-medium"
+                  >
+                    {extending ? 'Processing...' : 'Cancel Extended Stay'}
+                  </button>
+                )}
+                <button
+                  onClick={handleCheckOut}
+                  disabled={loading}
+                  className="w-full bg-red-600 text-white py-2 rounded-md hover:bg-red-700 disabled:opacity-50 font-medium"
+                >
+                  {loading ? 'Processing...' : 'Check Out'}
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -369,6 +473,32 @@ export default function DriverDashboard() {
                 />
                 Share GPS location on check-in
               </label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={extendedStay}
+                  onChange={(e) => setExtendedStay(e.target.checked)}
+                  className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                />
+                Extended stay (I need to stay longer than usual)
+              </label>
+              {extendedStay && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Reason for extended stay *
+                  </label>
+                  <input
+                    type="text"
+                    value={extendedStayReason}
+                    onChange={(e) => setExtendedStayReason(e.target.value)}
+                    placeholder="e.g. vehicle breakdown, waiting for parts"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Alert thresholds will be raised (6h/12h/24h instead of 2h/4h/8h)
+                  </p>
+                </div>
+              )}
               <button
                 onClick={handleCheckIn}
                 disabled={loading}
@@ -418,16 +548,28 @@ export default function DriverDashboard() {
                           Out: {formatDateTime(ci.checkOutTime)}
                         </p>
                       )}
+                      {ci.isExtendedStay && (
+                        <p className="text-xs text-amber-600 font-medium">
+                          Extended stay{ci.extendedStayReason ? `: ${ci.extendedStayReason}` : ''}
+                        </p>
+                      )}
                     </div>
-                    <span
-                      className={`text-xs font-medium px-2 py-1 rounded-full ${
-                        ci.checkOutTime
-                          ? 'bg-gray-100 text-gray-600'
-                          : 'bg-green-100 text-green-700'
-                      }`}
-                    >
-                      {ci.checkOutTime ? 'Completed' : 'Active'}
-                    </span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span
+                        className={`text-xs font-medium px-2 py-1 rounded-full ${
+                          ci.checkOutTime
+                            ? 'bg-gray-100 text-gray-600'
+                            : 'bg-green-100 text-green-700'
+                        }`}
+                      >
+                        {ci.checkOutTime ? 'Completed' : 'Active'}
+                      </span>
+                      {ci.isExtendedStay && !ci.checkOutTime && (
+                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+                          Extended
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </li>
               ))}
