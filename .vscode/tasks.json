@@ -1,0 +1,53 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Prisma Migrate Dev",
+			"type": "shell",
+			"command": "npx prisma migrate dev --name sms-integration",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Prisma Migrate Dev",
+			"type": "shell",
+			"command": "npx prisma migrate dev --name sms-integration",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Prisma Migrate Dev",
+			"type": "shell",
+			"command": "npx prisma migrate dev --name sms-integration",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Prisma Migrate Dev",
+			"type": "shell",
+			"command": "npx prisma migrate dev --name sms-integration",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Prisma Migrate Dev",
+			"type": "shell",
+			"command": "npx prisma migrate dev --name sms-integration",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Prisma Migrate Dev",
+			"type": "shell",
+			"command": "npx prisma migrate dev --name sms-integration",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

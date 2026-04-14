@@ -24,6 +24,15 @@ model User {
   password     String
   adminPhone   String?   // Phone number for SMS alerts (admins)
   adminEmail   String?   // Email for alert notifications (admins)
+  // --- SMS/Driver fields ---
+  driverPhone                String?
+  driverSmsSendOnCheckIn     Boolean @default(false)
+  driverSmsSendOnCheckOut    Boolean @default(false)
+  driverSmsOptOut            Boolean @default(false)
+  adminSmsOptOutTier1        Boolean @default(false)
+  adminSmsOptOutTier2        Boolean @default(false)
+  adminSmsOptOutTier3        Boolean @default(false)
+  // ---
   updatedNotificationSettings NotificationSettings[] @relation("NotificationSettingsUpdatedBy")
   checkIns     CheckIn[]
   createdAt    DateTime  @default(now())
@@ -39,10 +48,26 @@ model NotificationSettings {
   twilioAccountSid       String?
   twilioAuthTokenEnc     String?
   twilioFromNumber       String?
+  inboundSmsEnabled      Boolean  @default(false) // Superuser can enable/disable inbound SMS
   updatedBy              User?    @relation("NotificationSettingsUpdatedBy", fields: [updatedById], references: [id])
   updatedById            String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
+}
+
+model SmsAuditLog {
+  id               String   @id @default(cuid())
+  recipientPhone   String
+  messageBody      String   @db.Text
+  triggerType      String   // "admin-alert", "driver-checkin-confirm", "driver-checkout-confirm", "manual-trigger", "inbound-checkin", "inbound-checkout"
+  checkInId        String?
+  initiatedByUserId String?
+  twilioSid        String?
+  twilioStatus     String   @default("queued")
+  error            String?
+  direction        String   @default("outbound") // "outbound" or "inbound"
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Location {
