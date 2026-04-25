@@ -36,6 +36,14 @@ When a change touches Prisma schema or DB-dependent behavior, always do all of t
 - Run build: `npm run build`.
 - If schema changed, ensure Prisma client generation succeeds.
 
+## Deployment and Testing
+
+- See `docs/deployment-coolify.md` for Coolify self-hosted setup.
+- See `docs/azure-deployment.md` for Azure deployment.
+- See `docs/docker-local.md` for Docker-only local server.
+- Run `npm run lint` and `npm run build` before testing.
+- Ensure Prisma migrations are applied via `npx prisma migrate deploy` in production.
+
 ## Available Agents
 
 - **Project Maintainer**: `.github/agents/project-maintainer.agent.md`
