@@ -1,0 +1,17 @@
+# Dockerignore file for Next.js app
+node_modules
+.next
+.out
+.cache
+.env
+.env.local
+.env.development
+.env.production
+npm-debug.log
+Dockerfile
+docker-compose.yml
+.git
+.gitignore
+LICENSE
+README.md
+coverage

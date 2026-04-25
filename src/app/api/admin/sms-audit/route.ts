@@ -1,24 +1,31 @@
 // See docs/twilio-sms-testing.md for Twilio sandbox/test credential usage and magic numbers reference.
 // Official docs: https://www.twilio.com/docs/iam/test-credentials
 
-const express = require('express');
-const router = express.Router();
-const twilio = require('twilio');
+import { NextRequest, NextResponse } from 'next/server';
+import { Twilio } from 'twilio';
 
-router.get('/sms/:to', async (req, res) => {
-  const { to } = req.params;
-  const { body } = req;
+const twilioClient = new Twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const to = searchParams.get('to');
+  const body = searchParams.get('body') || '';
+
+  if (!to) {
+    return NextResponse.json({ error: 'Missing required parameter: to' }, { status: 400 });
+  }
 
   try {
-    const result = await twilio.messages.create({
+    const result = await twilioClient.messages.create({
       body,
       from: 'whatsapp:+1415523888',
       to
     });
-    res.json(result);
+    return NextResponse.json(result);
   } catch (error) {
-    res.status(500).json(error);
+    return NextResponse.json(error, { status: 500 });
   }
-});
-
-module.exports = router;
+}

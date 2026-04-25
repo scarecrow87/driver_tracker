@@ -1,23 +1,23 @@
 // See docs/twilio-sms-testing.md for Twilio sandbox/test credential usage and magic numbers reference.
 // Official docs: https://www.twilio.com/docs/iam/test-credentials
 
-import { Request, Response } from 'express';
+import { NextRequest, NextResponse } from 'next/server';
 import { Twilio } from 'twilio';
 
-export const twilioSmsStatusWebhookHandler = async (req: Request, res: Response) => {
-  const { SID, MessageSid, Body } = req.body;
+const client = new Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+export async function POST(req: NextRequest) {
+  const { SID, MessageSid, Body } = await req.json();
 
   if (!SID || !MessageSid || !Body) {
-    return res.status(400).json({ error: 'Missing required fields' });
+    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
-
-  const client = new Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
   try {
-    const result = await client.messages(MessageSid).read();
-    res.json(result);
+    const result = await client.messages(MessageSid).fetch();
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching message:', error);
-    res.status(500).json({ error: 'Failed to fetch message' });
+    return NextResponse.json({ error: 'Failed to fetch message' }, { status: 500 });
   }
-};
+}

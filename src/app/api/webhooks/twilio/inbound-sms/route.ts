@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { SmsAuditLog } from '@prisma/client';
 
 // Helper: parse SMS body for command and location code
 function parseSmsBody(body: string) {
@@ -14,32 +13,32 @@ function parseSmsBody(body: string) {
 // Official docs: https://www.twilio.com/docs/iam/test-credentials
 
 export async function POST(req: NextRequest) {
-    // Failsafe: limit number of inbound SMS check-ins/check-outs per driver per day
-    const MAX_SMS_ACTIONS_PER_DAY = 4; // configurable, e.g. 4 per day
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const smsCount = await prisma.smsAuditLog.count({
-      where: {
-        recipientPhone: from,
-        direction: 'inbound',
-        createdAt: { gte: today },
-        triggerType: { in: ['inbound-checkin', 'inbound-checkout'] },
-      },
-    });
-    if (smsCount >= MAX_SMS_ACTIONS_PER_DAY) {
-      return new NextResponse('<Response><Message>Daily SMS check-in/out limit reached. Please contact your admin if this is an error.</Message></Response>', {
-        status: 200,
-        headers: { 'Content-Type': 'text/xml' },
-      });
-    }
   const formData = await req.formData();
   const from = formData.get('From') as string; // E.164
   const body = formData.get('Body') as string;
 
+  // Failsafe: limit number of inbound SMS check-ins/check-outs per driver per day
+  const MAX_SMS_ACTIONS_PER_DAY = 4;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const smsCount = await prisma.smsAuditLog.count({
+    where: {
+      recipientPhone: from,
+      direction: 'inbound',
+      createdAt: { gte: today },
+      triggerType: { in: ['inbound-checkin', 'inbound-checkout'] },
+    },
+  });
+  if (smsCount >= MAX_SMS_ACTIONS_PER_DAY) {
+    return new NextResponse('<Response><Message>Daily SMS check-in/out limit reached. Please contact your admin if this is an error.</Message></Response>', {
+      status: 200,
+      headers: { 'Content-Type': 'text/xml' },
+    });
+  }
+
   // Parse command and location
   const parsed = parseSmsBody(body);
   if (!parsed) {
-    // Respond with error message
     return new NextResponse('<Response><Message>Invalid format. Use CHECKIN <location_code> or CHECKOUT <location_code>.</Message></Response>', {
       status: 200,
       headers: { 'Content-Type': 'text/xml' },
@@ -76,7 +75,6 @@ export async function POST(req: NextRequest) {
     });
     message = `Check-in recorded at ${location.name}.`;
   } else if (parsed.command === 'CHECKOUT') {
-    // Find latest open check-in
     const openCheckIn = await prisma.checkIn.findFirst({
       where: {
         driverId: driver.id,
