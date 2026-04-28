@@ -24,11 +24,6 @@ app.use(
   })
 );
 
-// Session middleware placeholder (implement as needed)
-app.use((req: any, res: any, next: any) => {
-  req.session = req.session || {};
-  next();
-});
 
 app.use('/api/locations', locationRoutes);
 
