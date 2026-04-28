@@ -7,13 +7,14 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 
 const createUserSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().optional(),
   name: z.string().min(1),
   password: z.string().min(6),
   role: z.enum(['ADMIN', 'DRIVER', 'SUPERUSER']).default('DRIVER'),
   isActive: z.boolean().optional().default(true),
   adminPhone: z.string().optional(),
   adminEmail: z.string().email().optional(),
+  driverPhone: z.string().optional(),
 });
 
 // GET /api/admin/users – list users
@@ -67,11 +68,14 @@ export async function POST(req: NextRequest) {
   }
 
   const hashed = await bcrypt.hash(parsed.data.password, 10);
+  // If role is DRIVER and email is not provided, set to empty string to satisfy Prisma
+  const userData = {
+    ...parsed.data,
+    password: hashed,
+    email: parsed.data.role === 'DRIVER' ? (parsed.data.email ?? '') : (parsed.data.email as string),
+  };
   const user = await prisma.user.create({
-    data: {
-      ...parsed.data,
-      password: hashed,
-    },
+    data: userData,
     select: {
       id: true,
       email: true,
@@ -80,6 +84,7 @@ export async function POST(req: NextRequest) {
       isActive: true,
       adminPhone: true,
       adminEmail: true,
+      driverPhone: true,
       createdAt: true,
     },
   });

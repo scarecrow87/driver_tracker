@@ -13,6 +13,7 @@ const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
   adminPhone: z.string().optional(),
   adminEmail: z.string().email().optional(),
+  driverPhone: z.string().optional(),
 });
 
 // PUT /api/admin/users/[id]
@@ -70,6 +71,7 @@ export async function PUT(
         isActive: true,
         adminPhone: true,
         adminEmail: true,
+        driverPhone: true,
         createdAt: true,
       },
     });
