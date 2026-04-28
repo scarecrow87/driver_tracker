@@ -1,12 +1,12 @@
-import * as express from 'express';
+const express = require('express');
 import locationRoutes from './routes/locationRoutes';
 
 const app = express();
 app.use(express.json());
 
 // Session middleware placeholder (implement as needed)
-app.use((req, res, next) => {
-  (req as any).session = (req as any).session || {};
+app.use((req: any, res: any, next: any) => {
+  req.session = req.session || {};
   next();
 });
 
