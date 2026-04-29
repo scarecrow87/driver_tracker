@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { isAdmin, isSuperuser, isAdminOrSuperuser } from '../../src/lib/auth';
+import { isAdmin, isSuperuser, isAdminOrSuperuser } from '../lib/auth';
 
 // Middleware to authenticate JWT and attach user to req.session
 export function authenticateJWT(req: Request, res: Response, next: NextFunction) {

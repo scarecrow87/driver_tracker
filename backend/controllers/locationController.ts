@@ -4,10 +4,10 @@ import { Request, Response } from 'express';
 interface SessionRequest extends Request {
   session?: any;
 }
-import { prisma } from '../../src/lib/prisma';
-import { geocodeAddress } from '../../src/lib/geocode';
+import { prisma } from '../lib/prisma';
+import { geocodeAddress } from '../lib/geocode';
 import { z } from 'zod';
-import { isAdminOrSuperuser } from '../../src/lib/auth';
+import { isAdminOrSuperuser } from '../lib/auth';
 
 const createSchema = z.object({
   name: z.string().min(1),

@@ -17,29 +17,16 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
+  backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
-    container_name: driver_tracker_app
+    container_name: driver_tracker_backend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3001"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-driver_tracker}
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-changeme}
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY:-}
-      AUTO_SEED_ON_EMPTY_DB: ${AUTO_SEED_ON_EMPTY_DB:-true}
-      MIGRATION_MAX_RETRIES: ${MIGRATION_MAX_RETRIES:-10}
-      MIGRATION_RETRY_DELAY_SECONDS: ${MIGRATION_RETRY_DELAY_SECONDS:-5}
-      EMAIL_TENANT_ID: ${EMAIL_TENANT_ID:-}
-      EMAIL_CLIENT_ID: ${EMAIL_CLIENT_ID:-}
-      EMAIL_CLIENT_SECRET: ${EMAIL_CLIENT_SECRET:-}
-      EMAIL_FROM: ${EMAIL_FROM:-}
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
-      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
     depends_on:
       db:
         condition: service_healthy
