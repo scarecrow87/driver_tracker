@@ -1,203 +1,3 @@
-# Driver Tracker
-
-A driver safety tracking Progressive Web App (PWA) built with Next.js, TypeScript, Tailwind CSS, Prisma, NextAuth.js, and Docker.
-
-## Features
-
-- **Driver check-in / check-out** at specific locations
-- **Optional geolocation capture** at check-in (if browser permission granted)
-- **Admin dashboard** with location management, user management, check-in history, and last-location map view
-- **Superuser settings panel** for email/SMS provider configuration
-- **2-hour alert system**: background cron job sends email and SMS alerts when a driver has been checked in for more than 2 hours
-- **Role-based authentication** (SUPERUSER / ADMIN / DRIVER)
-- **Active / inactive controls** for drivers and locations
-- **Offline-ready driver flow (initial implementation)** with IndexedDB location cache, offline action queue, reconnect replay fallback, and explicit “not logged until sync” warnings
-- **PWA** – installable on mobile devices with offline support
-
-## Quick Start (Docker)
-
-1. **Copy environment file**
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   Edit `.env` and fill in your secrets (at minimum `NEXTAUTH_SECRET`).
-
-2. **Start services**
-
-   ```bash
-   docker-compose up -d
-   ```
-
-   The app container automatically applies any pending database migrations on startup.
-   Startup runs `prisma migrate deploy` with retry logic (configurable via `MIGRATION_MAX_RETRIES` and `MIGRATION_RETRY_DELAY_SECONDS`).
-   On a brand-new database, startup also auto-seeds default users and sample locations once (can be disabled with `AUTO_SEED_ON_EMPTY_DB=false`).
-
-3. **(Optional) Re-seed initial data manually**
-
-   ```bash
-   npx --yes -p tsx tsx prisma/seed.ts
-   ```
-
-   Use this only when you want to re-apply the default users/locations intentionally.
-
-4. **Open the app**
-
-   Visit [http://localhost:3000](http://localhost:3000)
-
-   Default credentials:
-   - Superuser: `superuser@example.com` / `super123`
-   - Admin: `admin@example.com` / `admin123`
-   - Driver: `driver@example.com` / `driver123`
-
-## Development
-
-### Prerequisites
-
-- Node.js 20+
-- PostgreSQL 15 (or use Docker)
-
-### Setup
-
-```bash
-# Install dependencies
-npm install
-
-# Generate Prisma client
-npx prisma generate
-
-# Push schema to database (dev)
-npx prisma db push
-
-# Seed data
-npm run db:seed
-
-# Start dev server
-npm run dev
-```
-
-### DB Change Quick Checklist
-
-Use this checklist whenever a change touches Prisma schema or DB-dependent behavior:
-
-1. Update `prisma/schema.prisma`.
-2. Create or update migration SQL under `prisma/migrations`.
-3. Run `npx prisma generate`.
-4. Apply migrations:
-   - Local feature work: `npx prisma migrate dev`
-   - Deployment/testing environments: `npx prisma migrate deploy`
-5. Update this README if setup/run steps changed.
-
-### Database Changes After Pulling Code Updates
-
-When the schema or migrations change, run the DB steps before starting the app.
-
-For local development:
-
-```bash
-# Apply committed migrations
-npx prisma migrate deploy
-
-# Regenerate Prisma client for updated types
-npx prisma generate
-```
-
-When creating a new schema change in development:
-
-```bash
-# Create and apply a new migration
-npx prisma migrate dev --name describe_change
-
-# Regenerate Prisma client
-npx prisma generate
-```
-
-If you are using Docker, the container startup script applies pending migrations automatically, but you should still run `npx prisma generate` locally after pulling schema changes so editor types stay in sync.
-
-### Environment Variables
-
-| Variable | Description |
-|---|---|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `NEXTAUTH_SECRET` | Secret for JWT signing |
-| `NEXTAUTH_URL` | App base URL |
-| `SETTINGS_ENCRYPTION_KEY` | 32-byte key (raw or base64) used to encrypt notification provider secrets stored in DB |
-| `AUTO_SEED_ON_EMPTY_DB` | Optional startup flag to seed defaults when no users exist (default `true`) |
-| `MIGRATION_MAX_RETRIES` | Optional Docker startup retry count for `prisma migrate deploy` (default `10`) |
-| `MIGRATION_RETRY_DELAY_SECONDS` | Optional wait between migration retries in seconds (default `5`) |
-
-Optional fallback provider env vars (used only if superuser DB settings are empty): `EMAIL_TENANT_ID`, `EMAIL_CLIENT_ID`, `EMAIL_CLIENT_SECRET`, `EMAIL_FROM`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`.
-
-## Database Backup and Restore
-
-Backups are full PostgreSQL dumps stored locally in `./backups` by default.
-
-### How First Startup Works
-
-On a brand-new setup, the startup flow is:
-
-1. The `db` container starts and becomes healthy.
-2. The `app` container runs `prisma migrate deploy`.
-3. If `AUTO_SEED_ON_EMPTY_DB=true` and the `User` table is empty, the app seeds the default superuser, admin, driver, and sample locations.
-4. The Next.js server starts.
-
-This auto-seed happens only when no users exist.
-
-If you are restoring a real backup onto a new server, you can still start the stack normally first. If the empty database gets auto-seeded before restore, that is acceptable because the restore scripts drop and recreate the `public` schema before importing the backup. The restored data replaces the temporary seeded defaults.
-
-If you want to avoid even temporary default records on a restore target, set `AUTO_SEED_ON_EMPTY_DB=false` before first startup, restore the backup, and then start or restart the app.
-
-### Create a Backup
-
-```bash
-sh ./scripts/backup-db.sh
-```
-
-```powershell
-./scripts/backup-db.ps1
-```
-
-### Restore from Backup
-
-```bash
-sh ./scripts/restore-db.sh ./backups/driver_tracker_YYYYMMDD_HHMMSS.sql.gz
-```
-
-```powershell
-./scripts/restore-db.ps1 -BackupFile .\backups\driver_tracker_YYYYMMDD_HHMMSS.sql.gz
-```
-
-The restore scripts reset the `public` schema and then import the selected dump.
-
-Typical restore workflow:
-
-1. Make sure the Docker stack is running and the `db` container is healthy.
-2. Run the restore command with the chosen `.sql.gz` file.
-3. Confirm the destructive prompt.
-4. After restore completes, restart the app container if you want a clean reconnect cycle:
-
-```bash
-docker compose restart app
-```
-
-5. Log in and verify critical data.
-
-### Server Move Runbook
-
-1. On source server, create a backup with `sh ./scripts/backup-db.sh` or `./scripts/backup-db.ps1`.
-2. Copy the generated `.sql.gz` file to the new server.
-3. On the new server, decide whether to keep first-start auto-seed enabled:
-   - Keep it enabled for the simplest setup. Temporary seeded records will be removed by restore.
-   - Disable it with `AUTO_SEED_ON_EMPTY_DB=false` if you want the new server to stay empty until restore.
-4. Start the stack with `docker compose up -d`.
-5. Restore the backup with `sh ./scripts/restore-db.sh <file>` or `./scripts/restore-db.ps1 -BackupFile <file>`.
-6. Restart the app container with `docker compose restart app`.
-7. Validate app login and critical flows (superuser login, admin dashboard, driver check-in/out, notification settings access).
-
-## Architecture
-
-```
 src/
 ├── app/
 │   ├── api/           # Next.js API routes
@@ -223,57 +23,77 @@ prisma/
 └── seed.ts            # Seed data
 ```
 
-## Background Alerts
+# Driver Tracker (Split Architecture)
 
-The cron job runs every 15 minutes inside the Next.js server process. It scans for open check-ins older than 2 hours and:
+Driver Tracker is now split into two independently deployable services:
 
-1. Sends an email alert via Microsoft Graph API (if configured)
-2. Sends an SMS alert via Twilio (if configured)
-3. Marks the check-in as `alertSent = true` to avoid duplicate alerts
+- **Frontend**: Next.js PWA (in `frontend/`)
+- **Backend**: Node.js/Express API (in `backend/`)
 
-Configure email/SMS credentials in `.env` to enable real notifications. Without credentials, alerts are logged to the console.
+## Features
 
-## PWA
-
-The app is configured as a PWA using `next-pwa`. In production, a service worker is registered automatically to cache static assets. Users can install the app on their mobile device.
+- Driver check-in/check-out, admin dashboard, superuser config, alert notifications
+- Role-based authentication (SUPERUSER / ADMIN / DRIVER)
+- Offline-ready PWA frontend
+- PostgreSQL database (Prisma)
+- Dockerized for local and production use
 
 ---
 
-## Notes & Future Considerations
+## Quick Start
 
-### Serverless Deployment
+### 1. Backend API
 
-The app can be adapted to run fully serverless (e.g. Vercel, AWS Lambda, Cloudflare Workers) with a few changes:
+See [backend/README.md](backend/README.md) for backend API setup, Docker, and environment variables.
 
-- **Database** – Replace PostgreSQL + Prisma with a serverless-compatible database such as [Neon](https://neon.tech), [PlanetScale](https://planetscale.com), [Supabase](https://supabase.com), or [Turso](https://turso.tech). All support Prisma drivers or their own lightweight ORMs.
-- **Background cron** – The in-process cron job (`src/lib/cron.ts`) cannot run on serverless platforms. Replace it with a scheduled function: Vercel Cron Jobs, AWS EventBridge + Lambda, or a third-party scheduler (e.g. [Trigger.dev](https://trigger.dev), [Inngest](https://www.inngest.com)) calling the existing `/api/admin/cron` endpoint.
-- **Email / SMS** – Microsoft Graph and Twilio are already HTTP-based, so no changes needed.
-- **Sessions** – Switch from database sessions to JWT sessions in NextAuth.js if you want to avoid a database call on every request.
-- **Static export** – A fully static export (`output: 'export'` in `next.config.js`) is possible for the client-only parts, but API routes and server-side rendering would need to be moved to separate functions.
+### 2. Frontend (PWA)
 
-### Offline / Client-Side Operation
+See [frontend/README.md](frontend/README.md) for frontend-only setup, build, and deployment (Cloudflare Pages, Nginx, or Node.js).
 
-The app now includes an initial offline workflow for the driver dashboard:
+---
 
-- **Offline queue (implemented)** – Check-in/check-out actions are queued locally when offline or on transient network failure.
-- **Reconnect replay fallback (implemented)** – Queued actions are replayed when connectivity returns and on app load while online.
-- **Local cache (implemented)** – Active location list is cached in IndexedDB so drivers can still pick locations while offline.
-- **User-visible warning (implemented)** – Drivers see a clear offline banner and explicit warnings that queued check-in/check-out actions are not logged server-side until sync succeeds.
+## Local Development (Split)
 
-Current limits and next hardening items:
+1. Start the backend API:
+   ```bash
+   cd backend
+   npm install
+   npm run build
+   npm start
+   # or use Docker Compose
+   docker compose up -d
+   ```
+2. Start the frontend:
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+3. Configure `.env` files in both `backend/` and `frontend/` as needed.
 
-- **Replay paths are now redundant by design** – Queue replay runs via both Background Sync service worker events and reconnect/app-load fallback.
-- **Idempotent offline writes are now persisted** – Check-in/check-out queued payloads include idempotency keys persisted in DB-backed request key columns.
-- **Conflict safety is enforced on checkout replay** – Checkout requests can target a specific check-in, and conflicting targets return explicit `409` responses.
+---
 
-### Extensibility – Other Tracking Methods & Integrations
+## Deployment
 
-The check-in model is intentionally simple (location + timestamp + optional GPS co-ordinates) so it can be extended without breaking existing data:
+- **Frontend**: Deploy `frontend/` to Cloudflare Pages, Nginx, or Node.js server. See [frontend/README.md](frontend/README.md).
+- **Backend**: Deploy `backend/` as a standalone Node.js API (Docker recommended). See [backend/README.md](backend/README.md).
 
-- **GPS / live tracking** – Add a `trackingPoints` table linked to a `CheckIn` and POST coordinates at regular intervals from the driver's device using the [Geolocation API](https://developer.mozilla.org/en-US/docs/Web/API/Geolocation_API) or a dedicated SDK.
-- **NFC / QR codes** – Generate a unique QR code per location. Scanning it triggers a check-in automatically, no manual selection needed. NFC tags can trigger the same API endpoint via the [Web NFC API](https://developer.mozilla.org/en-US/docs/Web/API/Web_NFC_API) on supported Android devices.
-- **Barcode / RFID** – Scanners that act as HID keyboards can pre-fill the location field; RFID readers can POST directly to the `/api/checkin` endpoint.
-- **Third-party fleet / telematics** – Expose a webhook receiver endpoint (e.g. `/api/webhooks/fleet`) to ingest events from platforms such as Samsara, Geotab, or Verizon Connect, mapping them onto the existing `CheckIn` model.
-- **Calendar / shift integration** – Integrate with Microsoft 365 or Google Calendar to automatically open a check-in when a shift starts and close it when the shift ends.
-- **Slack / Teams notifications** – Add an additional notification channel alongside email/SMS in `src/lib/notifications.ts` using incoming webhooks.
-- **Analytics export** – Add a CSV/JSON export endpoint for the check-in history so data can be loaded into BI tools (Power BI, Looker, etc.) or shared with payroll systems.
+---
+
+## Project Structure
+
+- `frontend/` – Next.js PWA (UI only)
+- `backend/` – Node.js/Express API
+- `prisma/` – Database schema and migrations
+- `docker-compose.yml` – Local dev stack (backend + Postgres)
+
+---
+
+## Migration Notes
+
+- All old monolithic app code is archived in `_archive_pre_split/`.
+- Only `frontend/` and `backend/` are active for new development.
+
+---
+
+For more, see the individual `README.md` files in each service folder.
