@@ -46,3 +46,5 @@ next-env.d.ts
 /backups/
 *.sql
 *.sql.gz
+_archive_pre_split/
+backend/dist/
