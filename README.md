@@ -31,15 +31,21 @@ Driver Tracker is now split into two independently deployable services:
 - **Backend**: Node.js/Express API (in `backend/`)
 
 ## Features
-
+ 
 - Driver check-in/check-out, admin dashboard, superuser config, alert notifications
 - Role-based authentication (SUPERUSER / ADMIN / DRIVER)
 - Offline-ready PWA frontend
 - PostgreSQL database (Prisma)
 - Dockerized for local and production use
-
+ 
 ---
-
+ 
+## API Documentation
+ 
+For complete API documentation, see [API Reference](docs/api-reference.md).
+ 
+---
+ 
 ## Quick Start
 
 ### 1. Backend API

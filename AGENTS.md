@@ -54,6 +54,7 @@ When a change touches Prisma schema or DB-dependent behavior, always do all of t
 - See `docs/deployment-coolify.md` for Coolify self-hosted setup
 - See `docs/azure-deployment.md` for Azure deployment
 - See `docs/docker-local.md` for Docker-only local backend
+- See `docs/api-reference.md` for comprehensive API documentation
 - Run `npm run lint` and `npm run build` in both services before testing
 - Ensure Prisma migrations are applied via `npx prisma migrate deploy` in production
 

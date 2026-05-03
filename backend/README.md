@@ -57,4 +57,4 @@ See `.env.example` for all supported variables.
 ## API Usage
 - All endpoints are under `/api/`
 - Use JWT Bearer tokens for authentication
-- See frontend README for API contract
+- For comprehensive API documentation, see [API Reference](../docs/api-reference.md)

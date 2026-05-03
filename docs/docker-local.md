@@ -1,12 +1,12 @@
-# Docker‑Only Local Server Deployment Plan
+# Backend Docker Deployment
 
-This plan describes how to run the Driver Tracker application on a bare‑metal or virtual machine using only Docker and Docker‑Compose. It is suitable for:
+This plan describes how to run the Driver Tracker **backend API** on a bare‑metal or virtual machine using only Docker and Docker‑Compose. It is suitable for:
 
-- A development or staging server that you manage yourself.
-- A small production‑like instance where you want full control without extra platform layers (Coolify, Kubernetes, etc.).
-- Environments where you already have Docker installed and want to keep the footprint minimal.
+- Backend API development and testing
+- A staging server for the API that you manage yourself
+- Environments where you already have Docker installed and want to test the backend in isolation
 
-The existing `docker-compose.yml` and `Dockerfile` in the repository are already configured for this scenario.
+The existing `docker-compose.yml` and `Dockerfile` in the repository are already configured for this scenario. **Note: This deploys only the backend service (port 3001). For frontend testing, see the frontend README.**
 
 ---
 
@@ -18,7 +18,7 @@ The existing `docker-compose.yml` and `Dockerfile` in the repository are already
 | **Docker Engine** | 24.0+ | Install via the official Docker repository. |
 | **Docker Compose** | v2 (the `docker compose` sub‑command) | Comes with Docker Engine ≥ 20.10; otherwise install the standalone plugin. |
 | **Git** | Any | To pull the source code. |
-| **Ports** | 3000 (HTTP) – optional 443 if you terminate TLS elsewhere | The app listens on `0.0.0.0:3000` inside the container. |
+| **Ports** | 3001 (HTTP) – optional 443 if you terminate TLS elsewhere | The backend API listens on `0.0.0.0:3001` inside the container. |
 | **Resources** | 1 vCPU, 2 GB RAM, 10 GB disk (more if you expect many concurrent drivers) | Adjust based on expected load. |
 
 ---
@@ -113,13 +113,14 @@ docker compose up -d
 
 Compose will:
 
-- Build the Next.js image (using the provided `Dockerfile`).
-- Start the PostgreSQL container (if you kept the `db` service).
-- Run the entrypoint script, which:
+- Build the backend image (using the provided `Dockerfile` in `backend/`).
+- Start the PostgreSQL container.
+- Run the backend entrypoint script, which:
   - Waits for the DB to be healthy.
-  - Executes `prisma migrate deploy` (with retries).
+  - Executes `prisma generate`.
+  - Executes `prisma migrate deploy`.
   - Seeds the database if `AUTO_SEED_ON_EMPTY_DB=true` and the User table is empty.
-  - Starts the Next.js server (`npm run start` → `next start`).
+  - Starts the Node.js server (`node dist/server.js`).
 
 ### 6. Verify the deployment
 
@@ -128,7 +129,7 @@ Compose will:
 docker compose ps
 
 # View logs (follow)
-docker compose logs -f app   # "app" is the service name from compose
+docker compose logs -f backend   # "backend" is the service name from compose
 
 # Or follow all services
 docker compose logs -f
@@ -137,12 +138,12 @@ docker compose logs -f
 You should see output similar to:
 
 ```
-app_1  | > next start
-app_1  | ready - started server on http://0.0.0.0:3000
-db_1   | LOG:  database system is ready to accept connections
+backend_1  | > node dist/server.js
+backend_1  | Server running on port 3001
+db_1       | LOG:  database system is ready to accept connections
 ```
 
-Open a browser and navigate to `http://<host-ip>:3000`. You should see the login page.
+Test the API with curl (see Testing with curl section below).
 
 **Default credentials (if seeding ran):**
 
@@ -151,6 +152,71 @@ Open a browser and navigate to `http://<host-ip>:3000`. You should see the login
 | Superuser | `superuser@example.com` | `super123` |
 | Admin | `admin@example.com` | `admin123` |
 | Driver | `driver@example.com` | `driver123` |
+
+---
+
+## Testing with curl
+
+Test the deployed API using curl commands:
+
+1. **Login as superuser to get JWT token:**
+   ```bash
+   curl -X POST http://localhost:3001/api/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"email":"superuser@example.com","password":"super123"}'
+   ```
+   Response:
+   ```json
+   {
+     "id":"...",
+     "email":"superuser@example.com",
+     "name":"Super User",
+     "role":"SUPERUSER",
+     "token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+   }
+   ```
+
+2. **Save the token for reuse:**
+   ```bash
+   TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."  # from login response
+   ```
+
+3. **Test admin stats endpoint:**
+   ```bash
+   curl -X GET http://localhost:3001/api/admin/stats \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+   Response:
+   ```json
+   {
+     "totalDrivers": 1,
+     "totalLocations": 3,
+     "activeCheckIns": 0,
+     "totalCheckIns": 0
+   }
+   ```
+
+4. **Test driver check-in (requires location ID):**
+   ```bash
+   # First get locations to find an active one
+   curl -X GET http://localhost:3001/api/locations \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+   Then use a location ID from the response:
+   ```bash
+   curl -X POST http://localhost:3001/api/checkin \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"locationId":"loc-123"}'
+   ```
+
+5. **Test driver check-out:**
+   ```bash
+   curl -X POST http://localhost:3001/api/checkin/checkout \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{}'
+   ```
 
 ---
 
@@ -305,7 +371,7 @@ nano .env   # fill DATABASE_URL, secrets, etc.
 docker compose up -d
 # 5. Verify
 docker compose logs -f
-# Open http://<host-ip>:3000
+# Test API: curl -H "Authorization: Bearer <token>" http://localhost:3001/api/locations
 ```
 
 That’s it—you now have a fully functional, Docker‑only instance of Driver Tracker ready for testing, staging, or light production use. Adjust the `docker-compose.yml` (resources, restart policies) as your needs grow. Happy deploying!

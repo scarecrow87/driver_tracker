@@ -1,6 +1,6 @@
 # Coolify Self‑Hosted Deployment Plan
 
-This plan outlines deploying the Driver Tracker app to a self‑hosted Coolify instance. It is the quickest way to get a test server up and running for live driver/admin testing.
+This plan outlines deploying the Driver Tracker **backend API** to a self‑hosted Coolify instance. It is the quickest way to get a test server up and running for live driver/admin testing.
 
 ## Prerequisites
 - A virtual machine or bare‑metal server (Ubuntu 22.04 LTS recommended) with at least 1 GB RAM, 1 vCPU, and 10 GB disk.
@@ -21,7 +21,7 @@ The script will install Docker (if not present) and the Coolify agent. After ins
 Coolify can provision managed databases. For production‑like testing, add a PostgreSQL instance:
 - In Coolify UI: **Resources → Add Resource → PostgreSQL**.
 - Choose a version (e.g., 15), set a password, and optionally enable backups.
-- Note the internal connection string (e.g., `postgresql://postgres:password@coolify-postgres:5432/postgres`).
+- Note the internal connection string (e.g., `postgresql://postgres:coolifypassword@coolify-postgres:5432/postgres`).
 
 ### 3. Prepare environment variables
 In Coolify, go to **Servers → [your server] → Resources → Environment Variables** (or set them per‑application). Add the following:
@@ -30,7 +30,7 @@ In Coolify, go to **Servers → [your server] → Resources → Environment Vari
 |----------|-------------|---------|
 | `DATABASE_URL` | PostgreSQL connection string. If using Coolify’s PostgreSQL resource, use the internal host. | `postgresql://postgres:coolifypassword@coolify-postgres:5432/postgres` |
 | `NEXTAUTH_SECRET` | Random string for JWT signing. | `$(openssl rand -base64 32)` |
-| `NEXTAUTH_URL` | Public URL of the app (used for Auth callbacks). | `https://driver-tracker.yourdomain.com` |
+| `NEXTAUTH_URL` | Public URL of the app (used for Auth callbacks). | `https://driver-tracker-backend.yourdomain.com` |
 | `SETTINGS_ENCRYPTION_KEY` | 32‑byte key (raw or base64) for encrypting provider secrets. | `$(openssl rand -base64 32)` |
 | `AUTO_SEED_ON_EMPTY_DB` | Set `true` to seed default users/locations on first start. | `true` |
 | `MIGRATION_MAX_RETRIES` | Docker startup retry count for migrations (default `10`). | `10` |
@@ -58,8 +58,8 @@ The repository must be accessible by the Coolify server (public or with a deploy
 - Set the build path to `/` (root).
 - Coolify will automatically detect the `Dockerfile` and use it.
 - (Optional) Under **Build & Deploy Settings**, you can specify custom build commands, but the default works:
-  - Build: `docker build -t driver-tracker .`
-  - Start: `docker run -p 3000:3000 driver-tracker`
+  - Build: `docker build -t driver-tracker-backend .`
+  - Start: `docker run -p 3001:3001 driver-tracker-backend`
 - Under **Environment Variables**, add the variables you prepared in step 3 (or import from a `.env` file if you have one).
 - Under **Deploy Triggers**, enable **Automatic Deployments** on pushes to `main` if you want updates on every push.
 - Click **Save & Deploy**.
@@ -71,12 +71,12 @@ The repository must be accessible by the Coolify server (public or with a deploy
   - Prisma client generation.
   - Database migration (`prisma migrate deploy`).
   - Seeding (if `AUTO_SEED_ON_EMPTY_DB=true` and the DB is empty).
-  - Next.js startup (`next start`) and the message `ready - started server on http://0.0.0.0:3000`.
-- Once the logs indicate the app is ready, visit the URL you set in `NEXTAUTH_URL` (or the server’s IP with port 3000 if not using a reverse proxy).
+  - Node.js startup (`node dist/server.js`) and the message `Server running on port 3001`.
+- Once the logs indicate the app is ready, visit the URL you set in `NEXTAUTH_URL` (or the server’s IP with port 3001 if not using a reverse proxy) and append `/api/locations` to test the API (requires authentication).
 
 ### 7. Live testing
-- **Driver flow**: Open the app on a mobile device or browser, perform check‑in/check‑out.
-- **Admin flow**: Log in as an admin (default credentials from the seed: `admin@example.com` / `admin123`) and verify the dashboard, driver management, and notification settings.
+- **API testing**: Use curl or Postman to test the endpoints (see the API reference for details).
+- **Admin flow**: Log in as an admin (default credentials from the seed: `admin@example.com` / `admin123`) via the frontend (deployed separately) or test the admin endpoints directly via API.
 - **SMS/Twilio**: If configured, test inbound/outbound SMS (use Twilio test credentials or real ones for live tests).
 - **Notifications**: Trigger events that send emails/SMS and verify delivery.
 
@@ -89,12 +89,15 @@ The repository must be accessible by the Coolify server (public or with a deploy
 
 ## Quick‑Test Tips
 - Use Coolify’s one‑click PostgreSQL to avoid managing an external DB.
-- Share the test URL with a few drivers/admins for real‑world feedback.
+- Share the test URL with a few drivers/admins for real‑world feedback (via the frontend, which should be deployed separately).
 - If you need to iterate quickly, enable automatic deployments and push to `main`; Coolify will rebuild and redeploy automatically.
 
 ## Notes
 - The existing `Dockerfile` and `.dockerignore` in the repository are optimized for Coolify’s Docker builder.
-- Ensure the host firewall allows inbound traffic on port 8000 (Coolify UI) and 3000 (app) or configure a reverse proxy (e.g., Caddy/Nginx) for TLS on ports 80/443.
+- The Dockerfile builds the backend to `dist/server.js` and uses a multi‑stage build (deps → builder → runner).
+- The entrypoint script runs `prisma generate`, `prisma migrate deploy`, and seeds the database (if enabled) before starting the server.
+- The backend uses the Prisma 7 adapter pattern (`@prisma/adapter-pg` with a `pg.Pool` instance) as defined in `backend/lib/prisma.ts`.
+- Ensure the host firewall allows inbound traffic on port 8000 (Coolify UI) and 3001 (backend API) or configure a reverse proxy (e.g., Caddy/Nginx) for TLS on ports 80/443.
 - For production‑like workloads, consider increasing the host’s resources (CPU/RAM) and enabling Coolify’s built‑in scaling features (if available) or adding a load balancer.
 
 ---

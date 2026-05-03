@@ -1,6 +1,6 @@
-# Azure Deployment Plan for Driver Tracker
+# Azure Deployment Plan for Driver Tracker Backend API
 
-This plan outlines deploying the Driver Tracker app to Microsoft Azure using:
+This plan outlines deploying the Driver Tracker **backend API** to Microsoft Azure using:
 - **Azure Container Registry (ACR)** for storing the Docker image
 - **Azure App Service** (Linux) for running the container
 - **Azure Database for PostgreSQL Flexible Server** as the managed database
@@ -20,7 +20,7 @@ This plan outlines deploying the Driver Tracker app to Microsoft Azure using:
 RESOURCE_GROUP=driver-tracker-rg
 LOCATION=eastus
 ACR_NAME=drivertrackeracr$(openssl rand -hex 3)   # must be globally unique
-APP_SERVICE_NAME=drivertracker-app$(openssl rand -hex 3)
+APP_SERVICE_NAME=drivertracker-backend$(openssl rand -hex 3)
 POSTGRES_NAME=drivertracker-pg$(openssl rand -hex 3)
 POSTGRES_ADMIN=pgadmin
 POSTGRES_PASSWORD=$(openssl rand -base64 32)   # store securely
@@ -71,11 +71,11 @@ POSTGRES_CONNECTION=$(az postgres flexible-server show-connection-string \
 # Log in to ACR
 az acr login --name $ACR_NAME
 
-# Build the image (using the existing Dockerfile)
-docker build -t $ACR_NAME.azurecr.io/driver-tracker:latest .
+# Build the image (using the existing Dockerfile in backend/)
+docker build -t $ACR_NAME.azurecr.io/driver-tracker-backend:latest ./backend
 
 # Push
-docker push $ACR_NAME.azurecr.io/driver-tracker:latest
+docker push $ACR_NAME.azurecr.io/driver-tracker-backend:latest
 ```
 
 ### 3. Create Azure App Service (Linux) with Docker Container
@@ -93,13 +93,13 @@ az webapp create \
   --resource-group $RESOURCE_GROUP \
   --plan $APP_SERVICE_NAME-plan \
   --name $APP_SERVICE_NAME \
-  --deployment-container-image-name $ACR_NAME.azurecr.io/driver-tracker:latest
+  --deployment-container-image-name $ACR_NAME.azurecr.io/driver-tracker-backend:latest
 
 # Configure ACR credentials for the web app
 az webapp config container set \
   --name $APP_SERVICE_NAME \
   --resource-group $RESOURCE_GROUP \
-  --docker-custom-image-name $ACR_NAME.azurecr.io/driver-tracker:latest \
+  --docker-custom-image-name $ACR_NAME.azurecr.io/driver-tracker-backend:latest \
   --docker-registry-server-url https://$ACR_NAME.azurecr.io \
   --docker-registry-server-user $(az acr credential show --name $ACR_NAME --query username -o tsv) \
   --docker-registry-server-password $(az acr credential show --name $ACR_NAME --query passwords[0].value -o tsv)
@@ -121,12 +121,12 @@ az webapp config appsettings set \
   --name $APP_SERVICE_NAME \
   --resource-group $RESOURCE_GROUP \
   --settings DATABASE_URL="$DATABASE_URL" \
-             NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
-             NEXTAUTH_URL="$NEXTAUTH_URL" \
-             SETTINGS_ENCRYPTION_KEY="$SETTINGS_ENCRYPTION_KEY" \
-             AUTO_SEED_ON_EMPTY_DB=true \
-             MIGRATION_MAX_RETRIES=10 \
-             MIGRATION_RETRY_DELAY_SECONDS=5
+            NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
+            NEXTAUTH_URL="$NEXTAUTH_URL" \
+            SETTINGS_ENCRYPTION_KEY="$SETTINGS_ENCRYPTION_KEY" \
+            AUTO_SEED_ON_EMPTY_DB=true \
+            MIGRATION_MAX_RETRIES=10 \
+            MIGRATION_RETRY_DELAY_SECONDS=5
 # Add optional provider secrets if needed (Twilio, Microsoft Graph)
 ```
 
@@ -135,11 +135,11 @@ az webapp config appsettings set \
 - **Option B**: Use GitHub Actions to build & push to ACR, then Azure App Service webhook for sync.
 
 ### 6. Database Migrations on Startup
-The existing Dockerfile/entrypoint.sh already runs `prisma migrate deploy` on container start (see `entrypoint.sh`). Ensure the App Service starts the container with that entrypoint (it does by default).
+The existing Dockerfile/entrypoint.sh already runs `prisma generate`, `prisma migrate deploy`, and seeds the database (if enabled) on container start (see `backend/docker-entrypoint.sh`). Ensure the App Service starts the container with that entrypoint (it does by default).
 
 ### 7. Verify Deployment
-- Browse to `https://<APP_SERVICE_NAME>.azurewebsites.net`
-- Test driver check‑in/check‑out, admin login, notification settings.
+- Browse to `https://<APP_SERVICE_NAME>.azurewebsites.net/api/locations` (requires authentication)
+- Test API endpoints with curl or Postman (see API reference for details)
 - Check logs: `az webapp log tail --name $APP_SERVICE_NAME --resource-group $RESOURCE_GROUP`
 
 ### 8. Monitoring & Scaling
@@ -151,14 +151,6 @@ The existing Dockerfile/entrypoint.sh already runs `prisma migrate deploy` on co
 - Enable PostgreSQL backup retention (flexible server includes configurable backup).
 - For App Service, use Azure Backup or clone the app/stage slots.
 - Document restore steps: copy backup, restore PostgreSQL, redeploy image.
-
-## Coolify API Usage (Answer to Your Question)
-Yes, Coolify provides a REST and GraphQL API that you can use to automate the steps in the Coolify plan:
-- **Create a server**: `POST /api/v1/servers`
-- **Add an application**: `POST /api/v1/applications`
-- **Set environment variables**: `PATCH /api/v1/applications/:id`
-- **Trigger a deploy**: `POST /api/v1/applications/:id/deploys`
-You would need an API token from your Coolify user settings. This allows you to script the entire Coolify setup from CI/CD or a management tool.
 
 ---
 *Plan generated on $(date). Adjust names, locations, and SKUs to match your workload and budget.*
