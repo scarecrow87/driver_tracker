@@ -1,27 +1,3 @@
-src/
-├── app/
-│   ├── api/           # Next.js API routes
-│   │   ├── auth/      # NextAuth handler
-│   │   ├── checkin/   # Check-in create/read
-│   │   ├── checkout/  # Check-out
-│   │   ├── checkins/  # List check-ins
-│   │   ├── locations/ # Location CRUD
-│   │   └── admin/     # Admin-only APIs
-│   ├── admin/         # Admin pages
-│   ├── driver/        # Driver pages
-│   ├── login/         # Login page
-│   └── layout.tsx
-├── lib/
-│   ├── auth.ts        # NextAuth configuration
-│   ├── cron.ts        # Background cron job
-│   ├── notifications.ts # Email/SMS helpers
-│   └── prisma.ts      # Prisma client singleton
-├── middleware.ts       # Route protection
-└── instrumentation.ts # Server startup hook
-prisma/
-├── schema.prisma      # Database schema
-└── seed.ts            # Seed data
-```
 
 # Driver Tracker (Split Architecture)
 
@@ -31,21 +7,21 @@ Driver Tracker is now split into two independently deployable services:
 - **Backend**: Node.js/Express API (in `backend/`)
 
 ## Features
- 
+  
 - Driver check-in/check-out, admin dashboard, superuser config, alert notifications
 - Role-based authentication (SUPERUSER / ADMIN / DRIVER)
 - Offline-ready PWA frontend
 - PostgreSQL database (Prisma)
 - Dockerized for local and production use
- 
+  
 ---
- 
+
 ## API Documentation
- 
+  
 For complete API documentation, see [API Reference](docs/api-reference.md).
- 
+  
 ---
- 
+
 ## Quick Start
 
 ### 1. Backend API
