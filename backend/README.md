@@ -58,3 +58,65 @@ See `.env.example` for all supported variables.
 - All endpoints are under `/api/`
 - Use JWT Bearer tokens for authentication
 - For comprehensive API documentation, see [API Reference](../docs/api-reference.md)
+
+## Testing with curl
+You can test the API directly using curl:
+
+1. **Login to get JWT token:**
+   ```bash
+   curl -X POST http://localhost:3001/api/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"email":"superuser@example.com","password":"super123"}'
+   ```
+   Response:
+   ```json
+   {
+     "id":"...",
+     "email":"superuser@example.com",
+     "name":"Super User",
+     "role":"SUPERUSER",
+     "token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+   }
+   ```
+
+2. **Save the token for reuse:**
+   ```bash
+   TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."  # from login response
+   ```
+
+3. **Test admin stats endpoint:**
+   ```bash
+   curl -X GET http://localhost:3001/api/admin/stats \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+   Response:
+   ```json
+   {
+     "totalDrivers": 1,
+     "totalLocations": 3,
+     "activeCheckIns": 0,
+     "totalCheckIns": 0
+   }
+   ```
+
+4. **Test driver check-in (requires location ID):**
+   ```bash
+   # First get locations to find an active one
+   curl -X GET http://localhost:3001/api/locations \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+   Then use a location ID from the response:
+   ```bash
+   curl -X POST http://localhost:3001/api/checkin \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"locationId":"loc-123"}'
+   ```
+
+5. **Test driver check-out:**
+   ```bash
+   curl -X POST http://localhost:3001/api/checkin/checkout \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{}'
+   ```

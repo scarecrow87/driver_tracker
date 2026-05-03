@@ -58,6 +58,52 @@ See [frontend/README.md](frontend/README.md) for frontend-only setup, build, and
 
 ---
 
+## API Testing
+
+You can test the backend API directly using curl:
+
+1. **Login to get JWT token:**
+   ```bash
+   curl -X POST http://localhost:3001/api/auth/login \
+     -H "Content-Type: application/json" \
+     -d '{"email":"superuser@example.com","password":"super123"}'
+   ```
+
+2. **Save the token for reuse:**
+   ```bash
+   TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."  # from login response
+   ```
+
+3. **Test admin stats endpoint:**
+   ```bash
+   curl -X GET http://localhost:3001/api/admin/stats \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+
+4. **Test driver check-in:**
+   ```bash
+   # First get locations
+   curl -X GET http://localhost:3001/api/locations \
+     -H "Authorization: Bearer $TOKEN"
+   ```
+   Then use a location ID:
+   ```bash
+   curl -X POST http://localhost:3001/api/checkin \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"locationId":"loc-123"}'
+   ```
+
+5. **Test driver check-out:**
+   ```bash
+   curl -X POST http://localhost:3001/api/checkin/checkout \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{}'
+   ```
+
+---
+
 ## Local Development (Split)
 
 1. Start the backend API:
