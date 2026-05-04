@@ -13,6 +13,7 @@ COPY backend/ ./
 RUN rm -rf prisma
 # Copy Prisma schema and migrations from project root
 COPY prisma/ ./prisma/
+RUN npx prisma generate
 RUN npm run build
 
 FROM node:20-alpine AS runner
