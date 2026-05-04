@@ -55,6 +55,8 @@ When a change touches Prisma schema or DB-dependent behavior, always do all of t
 - See `docs/azure-deployment.md` for Azure deployment
 - See `docs/docker-local.md` for Docker-only local backend
 - See `docs/api-reference.md` for comprehensive API documentation
+- See `docs/frontend-vps-nginx-wireguard.md` for frontend VPS deployment with Nginx and WireGuard
+- See `docs/traefik-driver-tracker.toml` for Traefik configuration example
 - Run `npm run lint` and `npm run build` in both services before testing
 - Ensure Prisma migrations are applied via `npx prisma migrate deploy` in production
 
