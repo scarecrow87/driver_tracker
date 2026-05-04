@@ -27,9 +27,23 @@ services:
       - "3001:3001"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-driver_tracker}
+      MIGRATION_MAX_RETRIES: ${MIGRATION_MAX_RETRIES:-10}
+      MIGRATION_RETRY_DELAY_SECONDS: ${MIGRATION_RETRY_DELAY_SECONDS:-5}
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const http=require('node:http'); const req=http.get('http://127.0.0.1:3001/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', () => process.exit(1)); req.setTimeout(4000, () => { req.destroy(); process.exit(1); });",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
 
 volumes:
   postgres_data:

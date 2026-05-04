@@ -57,9 +57,9 @@ The repository must be accessible by the Coolify server (public or with a deploy
 - In Coolify UI: **Applications → Add Application → Docker**.
 - Connect your Git repository (provide the clone URL and any required authentication).
 - Set the build path to `/` (root).
-- Coolify will automatically detect the `Dockerfile` and use it.
-- (Optional) Under **Build & Deploy Settings**, you can specify custom build commands, but the default works:
-  - Build: `docker build -t driver-tracker-backend .`
+- Set the Dockerfile path to `backend/Dockerfile`.
+- (Optional) Under **Build & Deploy Settings**, you can specify custom build commands. For the backend image, use:
+  - Build: `docker build -f backend/Dockerfile -t driver-tracker-backend .`
   - Start: `docker run -p 3001:3001 driver-tracker-backend`
 - Under **Environment Variables**, add the variables you prepared in step 3 (or import from a `.env` file if you have one).
 - Under **Deploy Triggers**, enable **Automatic Deployments** on pushes to `main` if you want updates on every push.
@@ -70,10 +70,11 @@ The repository must be accessible by the Coolify server (public or with a deploy
 - You should see:
   - Docker image build steps.
   - Prisma client generation.
-  - Database migration (`prisma migrate deploy`).
+  - Database migration (`prisma migrate deploy`), including migration `20260503020635_add_alert_level` being applied or reported as already applied.
   - Seeding (if `AUTO_SEED_ON_EMPTY_DB=true` and the DB is empty).
-  - Node.js startup (`node dist/server.js`) and the message `Server running on port 3001`.
-- Once the logs indicate the app is ready, verify `/api/auth/login` through the public frontend URL or the backend URL exposed by Coolify.
+  - Node.js startup (`node dist/server.js`) and the message `Backend server running on port 3001`.
+- Once the logs indicate the app is ready, verify `GET /api/health` through the backend URL exposed by Coolify. Use `GET /api/ready` when you need to confirm PostgreSQL is reachable and the expected schema has been migrated.
+- If `prisma migrate deploy` fails, inspect the Coolify deployment logs before continuing. Do not manually patch the database unless Prisma migration history has been confirmed.
 
 ### 7. Live testing
 - **API testing**: Use curl or Postman to test the endpoints (see the API reference for details).
@@ -83,11 +84,13 @@ The repository must be accessible by the Coolify server (public or with a deploy
 - **Browser push**: Enable notifications from the superuser settings page, send a test push, then trigger an overdue check-in alert.
 
 ### 8. Monitoring, backups, and rollback
-- **Health checks**: Coolify provides built‑in health checks (you can add a simple `/api/health` route if desired).
+- **Health checks**: The backend image includes a Docker `HEALTHCHECK` against `GET /api/health`, so Coolify should report the container as healthy instead of `Running (unknown)`. This endpoint is a process heartbeat and does not touch the database.
+- **Readiness checks**: `GET /api/ready` verifies PostgreSQL connectivity and confirms the `NotificationSettings.inboundSmsEnabled` column exists. A `503` response usually means the database is unavailable or migrations have not been applied.
 - **Logs**: View real‑time logs in the UI; you can also forward them to an external system.
 - **Snapshots/backups**: Coolify allows you to take snapshots of the application (including container image and configuration) for easy rollback.
 - **Database backups**: If you used Coolify’s PostgreSQL resource, enable automated backups in the resource settings.
 - **Rollback**: In the application’s **Deployments** tab, you can roll back to a previous successful deployment with one click.
+- **Redeploys**: If Coolify keeps running an old image after these changes, force a rebuild without cache or trigger a fresh deployment.
 
 ## Quick‑Test Tips
 - Use Coolify’s one‑click PostgreSQL to avoid managing an external DB.
@@ -95,9 +98,8 @@ The repository must be accessible by the Coolify server (public or with a deploy
 - If you need to iterate quickly, enable automatic deployments and push to `main`; Coolify will rebuild and redeploy automatically.
 
 ## Notes
-- The existing `Dockerfile` and `.dockerignore` in the repository are optimized for Coolify’s Docker builder.
-- The Dockerfile builds the backend to `dist/server.js` and uses a multi‑stage build (deps → builder → runner).
-- The entrypoint script runs `prisma generate`, `prisma migrate deploy`, and seeds the database (if enabled) before starting the server.
+- `backend/Dockerfile` is optimized for Coolify’s Docker builder and builds the backend to `dist/server.js` using a multi‑stage build (deps → builder → runner).
+- The entrypoint script runs `prisma generate`, retries `prisma migrate deploy` using `MIGRATION_MAX_RETRIES` and `MIGRATION_RETRY_DELAY_SECONDS`, and seeds the database (if enabled) before starting the server.
 - The backend uses the Prisma 7 adapter pattern (`@prisma/adapter-pg` with a `pg.Pool` instance) as defined in `backend/lib/prisma.ts`.
 - Ensure the host firewall allows inbound traffic on port 8000 (Coolify UI) and 3001 (backend API) or configure a reverse proxy (e.g., Caddy/Nginx) for TLS on ports 80/443.
 - For production‑like workloads, consider increasing the host’s resources (CPU/RAM) and enabling Coolify’s built‑in scaling features (if available) or adding a load balancer.
