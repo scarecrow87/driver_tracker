@@ -1,11 +1,11 @@
 # Driver Tracker Frontend
 
-Frontend-only deployment for Driver Tracker PWA. This project is split from the main Driver Tracker application to allow separate deployment on a different server.
+Frontend-only deployment for the Driver Tracker PWA. This project is split from the main Driver Tracker application so it can run on a plain VPS with nginx.
 
 ## Architecture
 
-- **Frontend**: Next.js 14 (standalone output) - serves UI only
-- **Backend**: Proxied under the same public origin at `/api`
+- **Frontend**: Next.js 14 standalone output on the VPS
+- **Edge**: nginx terminates HTTPS and proxies `/api` to the backend over WireGuard
 - **Authentication**: Backend-issued HTTP-only session cookie
 
 ## Setup
@@ -19,11 +19,7 @@ npm install
 
 2. **Configure environment**
 
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your values:
+Create `frontend/.env.production` with your values:
 
 ```bash
 NEXT_PUBLIC_API_URL=https://driver-tracker.example.com/api
@@ -40,7 +36,11 @@ Output will be in `.next/standalone/`.
 
 ## Deployment
 
-### Option 1: Direct Node.js
+### VPS + nginx
+
+Use [docs/frontend-vps-nginx-wireguard.md](../docs/frontend-vps-nginx-wireguard.md) for the full plain-VPS setup, including the systemd unit, nginx site block, and backend WireGuard proxy.
+
+### Direct Node.js
 
 ```bash
 # Copy standalone output to server
@@ -53,26 +53,20 @@ cd /var/www/driver-tracker-frontend
 node server.js
 ```
 
-### Option 2: Nginx
+### Nginx
 
-See `docs/nginx-frontend-config.md` for sample nginx configuration.
-
-### Option 3: Cloudflare Pages
-
-1. Build output: `.next/standalone/`
-2. Set `NEXT_PUBLIC_API_URL` environment variable
-3. Deploy as Cloudflare Pages function
+See [docs/nginx-frontend-config.md](docs/nginx-frontend-config.md) for the nginx site block used by the VPS deployment.
 
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `NEXT_PUBLIC_API_URL` | Backend API base URL |
-| `INTERNAL_API_URL` | Server-side backend API base URL for rewrites |
+| `NEXT_PUBLIC_API_URL` | Public browser API base URL, usually `https://<frontend-host>/api` |
+| `INTERNAL_API_URL` | Server-side backend API base URL for rewrites, usually `http://<backend-wireguard-ip>:3001/api` |
 
 ## API Calls
 
-All API calls are proxied to the backend server. The frontend uses `src/lib/api.ts` for fetching data.
+Browser requests should stay on the frontend origin and use `/api/*`. Server-side rewrites should point at the backend WireGuard address.
 
 ## PWA Notifications
 
@@ -80,6 +74,6 @@ Browser push requires HTTPS outside localhost. Configure `VAPID_PUBLIC_KEY`, `VA
 
 ## Troubleshooting
 
-- **Login fails**: Ensure nginx proxies `/api/*` to the backend and backend `NEXTAUTH_SECRET` is set
-- **API errors**: Check `NEXT_PUBLIC_API_URL` is correct
-- **Session not persisting**: Verify cookies are allowed
+- **Login fails**: Ensure nginx proxies `/api/*` to the backend WireGuard address and `AUTH_COOKIE_SECURE=true` is set on the backend
+- **API errors**: Check `NEXT_PUBLIC_API_URL` is the public frontend origin plus `/api`
+- **Session not persisting**: Verify the frontend is served over HTTPS and cookies are allowed

@@ -70,10 +70,9 @@ git pull
 
 ### 3. Configure environment variables
 
-Copy the example file and edit it:
+Create a local `.env` file and edit it:
 
 ```bash
-cp .env.example .env
 nano .env   # or your preferred editor
 ```
 
@@ -365,7 +364,6 @@ If you want richer metrics, consider exposing Prometheus metrics from the Next.j
 mkdir -p /opt/driver-tracker && cd $_
 git clone https://github.com/scarecrow87/driver_tracker.git .
 # 3. Configure .env
-cp .env.example .env
 nano .env   # fill DATABASE_URL, secrets, etc.
 # 4. Start
 docker compose up -d

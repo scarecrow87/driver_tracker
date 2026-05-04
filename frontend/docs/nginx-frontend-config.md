@@ -1,90 +1,30 @@
-# Nginx Frontend Server Setup
+# nginx Frontend Server Setup
 
-Use this when the frontend runs on a separate host but should expose one public HTTPS origin for the PWA and API.
+This is the nginx site block for the plain VPS frontend. It assumes:
 
-## Target Architecture
+- the Next.js standalone server is running on `127.0.0.1:3000`
+- the backend is reachable over WireGuard at `http://<backend-wireguard-ip>:3001`
+- the public frontend hostname is `https://<frontend-host>`
 
-- Public app URL: `https://driver-tracker.example.com`
-- Frontend server: Next.js standalone on `127.0.0.1:3000`
-- Backend API: reachable from nginx at `http://<backend-host>:3001`
-- Browser sees one origin: nginx serves the frontend and proxies `/api/*` to the backend
+The browser stays on one origin, and nginx proxies `/api/*` to the backend privately.
 
-This keeps the backend-issued HTTP-only auth cookie same-origin and avoids CORS for normal app traffic.
-
-## Build Environment
-
-Create `frontend/.env.production` before building:
-
-```bash
-NEXT_PUBLIC_API_URL=https://driver-tracker.example.com/api
-INTERNAL_API_URL=http://<backend-host>:3001/api
-```
-
-Build locally or on the frontend server:
-
-```bash
-cd frontend
-npm ci
-npm run build
-```
-
-Copy the standalone output:
-
-```bash
-sudo mkdir -p /var/www/driver-tracker-frontend/.next
-sudo rsync -a .next/standalone/ /var/www/driver-tracker-frontend/
-sudo rsync -a .next/static/ /var/www/driver-tracker-frontend/.next/static/
-sudo rsync -a public/ /var/www/driver-tracker-frontend/public/
-```
-
-## Systemd Service
-
-Create `/etc/systemd/system/driver-tracker-frontend.service`:
-
-```ini
-[Unit]
-Description=Driver Tracker Frontend
-After=network.target
-
-[Service]
-Type=simple
-User=www-data
-WorkingDirectory=/var/www/driver-tracker-frontend
-ExecStart=/usr/bin/node server.js
-Restart=always
-Environment=NODE_ENV=production
-Environment=PORT=3000
-Environment=NEXT_PUBLIC_API_URL=https://driver-tracker.example.com/api
-Environment=INTERNAL_API_URL=http://<backend-host>:3001/api
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Start it:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now driver-tracker-frontend
-```
-
-## Nginx Site
+## Site Block
 
 Create `/etc/nginx/sites-available/driver-tracker-frontend`:
 
 ```nginx
 server {
     listen 80;
-    server_name driver-tracker.example.com;
+    server_name <frontend-host>;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name driver-tracker.example.com;
+    server_name <frontend-host>;
 
-    ssl_certificate /etc/letsencrypt/live/driver-tracker.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/driver-tracker.example.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/<frontend-host>/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/<frontend-host>/privkey.pem;
 
     gzip on;
     gzip_vary on;
@@ -117,12 +57,14 @@ server {
     }
 
     location /api/ {
-        proxy_pass http://<backend-host>:3001/api/;
+        proxy_pass http://<backend-wireguard-ip>:3001/api/;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Port 443;
     }
 
     location / {
@@ -131,7 +73,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto https;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
     }
@@ -146,34 +88,8 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-## Backend Environment
+## Notes
 
-Set these on the backend service:
-
-```bash
-NEXTAUTH_SECRET=<shared-jwt-secret>
-AUTH_COOKIE_SECURE=true
-CORS_ORIGIN=https://driver-tracker.example.com
-VAPID_PUBLIC_KEY=<web-push-public-key>
-VAPID_PRIVATE_KEY=<web-push-private-key>
-VAPID_SUBJECT=mailto:admin@example.com
-```
-
-Generate VAPID keys with:
-
-```bash
-npx web-push generate-vapid-keys
-```
-
-## Verification
-
-```bash
-curl -I https://driver-tracker.example.com
-curl -I https://driver-tracker.example.com/manifest.json
-curl -I https://driver-tracker.example.com/sw.js
-curl -i -X POST https://driver-tracker.example.com/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"driver@example.com","password":"driver123"}'
-```
-
-The login response should include `Set-Cookie: driver_tracker_session=...`.
+- Use the backend WireGuard address in both the nginx proxy and `frontend/.env.production`.
+- Keep `AUTH_COOKIE_SECURE=true` on the backend once the frontend hostname is HTTPS.
+- The frontend service worker and manifest must stay on the public frontend origin for the PWA to work correctly.

@@ -3,7 +3,7 @@
 
 Driver Tracker is now split into two independently deployable services:
 
-- **Frontend**: Next.js PWA (in `frontend/`)
+- **Frontend**: Next.js PWA on a plain VPS with nginx (in `frontend/`)
 - **Backend**: Node.js/Express API (in `backend/`)
 
 ## Features
@@ -30,7 +30,7 @@ See [backend/README.md](backend/README.md) for backend API setup, Docker, and en
 
 ### 2. Frontend (PWA)
 
-See [frontend/README.md](frontend/README.md) for frontend-only setup, build, and deployment (Cloudflare Pages, Nginx, or Node.js).
+See [frontend/README.md](frontend/README.md) for frontend-only setup, build, and deployment on a plain VPS with nginx.
 
 ---
 
@@ -38,42 +38,33 @@ See [frontend/README.md](frontend/README.md) for frontend-only setup, build, and
 
 You can test the backend API directly using curl:
 
-1. **Login to get JWT token:**
+1. **Login and save the session cookie:**
    ```bash
-   curl -X POST http://localhost:3001/api/auth/login \
+   curl -c cookies.txt -X POST http://localhost:3001/api/auth/login \
      -H "Content-Type: application/json" \
      -d '{"email":"superuser@example.com","password":"super123"}'
    ```
 
-2. **Save the token for reuse:**
+2. **Test admin stats endpoint:**
    ```bash
-   TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."  # from login response
+   curl -b cookies.txt -X GET http://localhost:3001/api/admin/stats
    ```
 
-3. **Test admin stats endpoint:**
-   ```bash
-   curl -X GET http://localhost:3001/api/admin/stats \
-     -H "Authorization: Bearer $TOKEN"
-   ```
-
-4. **Test driver check-in:**
+3. **Test driver check-in:**
    ```bash
    # First get locations
-   curl -X GET http://localhost:3001/api/locations \
-     -H "Authorization: Bearer $TOKEN"
+   curl -b cookies.txt -X GET http://localhost:3001/api/locations
    ```
    Then use a location ID:
    ```bash
-   curl -X POST http://localhost:3001/api/checkin \
-     -H "Authorization: Bearer $TOKEN" \
+   curl -b cookies.txt -X POST http://localhost:3001/api/checkin \
      -H "Content-Type: application/json" \
      -d '{"locationId":"loc-123"}'
    ```
 
-5. **Test driver check-out:**
+4. **Test driver check-out:**
    ```bash
-   curl -X POST http://localhost:3001/api/checkin/checkout \
-     -H "Authorization: Bearer $TOKEN" \
+   curl -b cookies.txt -X POST http://localhost:3001/api/checkin/checkout \
      -H "Content-Type: application/json" \
      -d '{}'
    ```
@@ -103,7 +94,7 @@ You can test the backend API directly using curl:
 
 ## Deployment
 
-- **Frontend**: Deploy `frontend/` to Cloudflare Pages, Nginx, or Node.js server. See [frontend/README.md](frontend/README.md).
+- **Frontend**: Deploy `frontend/` to a VPS with nginx and a local Node.js standalone process. See [frontend/README.md](frontend/README.md).
 - **Backend**: Deploy `backend/` as a standalone Node.js API (Docker recommended). See [backend/README.md](backend/README.md).
 
 ---

@@ -1,0 +1,30 @@
+# Driver Tracker Traefik dynamic config
+#
+# Replace `api.driver.example.com` with the backend API hostname.
+# Backend upstream is the Coolify backend app mapped on 192.168.0.52:3001.
+
+[http.routers]
+  [http.routers.driver-tracker-api-rtr]
+    entryPoints = ["websecure"]
+    rule = "Host(`api.driver.example.com`)"
+    service = "driver-tracker-api-svc"
+    middlewares = ["driver-tracker-api-headers"]
+    [http.routers.driver-tracker-api-rtr.tls]
+      certResolver = "letsencrypt"
+
+[http.middlewares]
+  [http.middlewares.driver-tracker-api-headers.headers]
+    [http.middlewares.driver-tracker-api-headers.headers.customRequestHeaders]
+      X-Forwarded-Proto = "https"
+      X-Forwarded-Port = "443"
+    [http.middlewares.driver-tracker-api-headers.headers.customResponseHeaders]
+      X-Frame-Options = "SAMEORIGIN"
+      X-Content-Type-Options = "nosniff"
+      X-XSS-Protection = "1; mode=block"
+
+[http.services]
+  [http.services.driver-tracker-api-svc]
+    [http.services.driver-tracker-api-svc.loadBalancer]
+      passHostHeader = true
+      [[http.services.driver-tracker-api-svc.loadBalancer.servers]]
+        url = "http://192.168.0.52:3001"
