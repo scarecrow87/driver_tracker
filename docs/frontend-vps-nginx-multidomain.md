@@ -9,6 +9,8 @@ Use this when you already host multiple domains on one VPS and want Driver Track
 - nginx: terminates TLS, serves PWA static assets, proxies everything else to the Next.js server
 - API: proxied from the frontend origin via either nginx (`/api/*`) or Next.js rewrites
 
+For a concrete, copy/paste-ready example (including templates filled in), see `docs/pelz-dt.shellshock.net.au-vps-setup.md`.
+
 ## DNS
 
 Point the domain at your VPS public IP (A/AAAA). If you use Cloudflare, enable the proxy (orange cloud) and copy your existing real-IP stanza into the new vhost.
@@ -109,4 +111,3 @@ In a browser:
 - Confirm login works
 - Confirm the PWA installs and `Application -> Service Workers` shows the worker as active
 - Confirm subsequent API calls use same-origin cookies
-

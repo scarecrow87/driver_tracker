@@ -1,0 +1,25 @@
+[Unit]
+Description=Driver Tracker Frontend (pelz-dt.shellshock.net.au)
+After=network.target
+
+[Service]
+Type=simple
+
+User=nginx
+Group=nginx
+
+WorkingDirectory=/var/www/pelz-dt.shellshock.net.au/app
+ExecStart=/usr/bin/node server.js
+
+Restart=always
+RestartSec=2
+
+Environment=NODE_ENV=production
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3000
+Environment=NEXT_PUBLIC_API_URL=https://pelz-dt.shellshock.net.au/api
+Environment=INTERNAL_API_URL=http://192.168.0.52:3001/api
+
+[Install]
+WantedBy=multi-user.target
+
