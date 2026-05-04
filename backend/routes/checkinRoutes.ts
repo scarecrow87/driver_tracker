@@ -1,8 +1,28 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma';
+import { isAdminOrSuperuser } from '../lib/auth';
 import { authenticateJWT } from '../middleware/authMiddleware';
 
 const router = Router();
+
+const createCheckInSchema = z.object({
+  locationId: z.string().min(1),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  idempotencyKey: z.string().optional(),
+  extendedStay: z.boolean().optional(),
+  extendedStayReason: z.string().trim().min(1).optional(),
+});
+
+const checkoutSchema = z.object({
+  idempotencyKey: z.string().optional(),
+});
+
+const extendCheckInSchema = z.object({
+  extendedStay: z.boolean(),
+  reason: z.string().trim().min(1).optional(),
+});
 
 // All routes require authentication
 router.use(authenticateJWT);
@@ -15,12 +35,12 @@ router.post('/', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const { locationId, latitude, longitude, idempotencyKey, extendedStay, extendedStayReason } = req.body;
-
-    // Validate required fields
-    if (!locationId) {
-      return res.status(400).json({ error: 'Location ID is required' });
+    const parsedBody = createCheckInSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      return res.status(400).json({ error: 'Invalid check-in request' });
     }
+
+    const { locationId, latitude, longitude, idempotencyKey, extendedStay, extendedStayReason } = parsedBody.data;
 
     // Check for existing open check-in
     const existingOpenCheckin = await prisma.checkIn.findFirst({
@@ -120,7 +140,12 @@ router.post('/checkout', async (req, res) => {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const { idempotencyKey } = req.body;
+    const parsedBody = checkoutSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      return res.status(400).json({ error: 'Invalid checkout request' });
+    }
+
+    const { idempotencyKey } = parsedBody.data;
 
     // Find open checkin for the user
     const openCheckin = await prisma.checkIn.findFirst({
@@ -161,6 +186,57 @@ router.post('/checkout', async (req, res) => {
     res.json(checkedIn);
   } catch (error) {
     console.error('Checkout error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PATCH /api/checkin/:id/extend
+router.patch('/:id/extend', async (req, res) => {
+  try {
+    const user = req.session.user;
+    if (!user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const parsedBody = extendCheckInSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      return res.status(400).json({ error: 'Invalid extended stay request' });
+    }
+
+    const { extendedStay, reason } = parsedBody.data;
+    if (extendedStay && !reason) {
+      return res.status(400).json({ error: 'Extended stay reason is required' });
+    }
+
+    const checkin = await prisma.checkIn.findUnique({
+      where: { id: req.params.id },
+    });
+
+    if (!checkin) {
+      return res.status(404).json({ error: 'Check-in not found' });
+    }
+
+    if (!isAdminOrSuperuser(req.session) && checkin.driverId !== user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (checkin.checkOutTime) {
+      return res.status(400).json({ error: 'Completed check-ins cannot be updated' });
+    }
+
+    const updatedCheckin = await prisma.checkIn.update({
+      where: { id: checkin.id },
+      data: {
+        isExtendedStay: extendedStay,
+        extendedStayReason: extendedStay ? reason : null,
+        extendedStayAt: extendedStay ? new Date() : null,
+      },
+      include: { location: true },
+    });
+
+    res.json(updatedCheckin);
+  } catch (error) {
+    console.error('Extend checkin error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

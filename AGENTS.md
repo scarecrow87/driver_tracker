@@ -72,6 +72,20 @@ When a change touches Prisma schema or DB-dependent behavior, always do all of t
 - **UX Architect**: `.github/agents/design-ux-architect.md` – UX flows, accessibility
 - **React Frontend Engineer**: `.github/agents/expert-react-frontend-engineer.agent.md` – Advanced React, hooks, performance
 
+## Codex Skills
+
+These `.kilo/agents/*.md` briefs are mirrored as Codex skills under `/home/brendan/.codex/skills/` with matching names:
+
+- `project-maintainer`
+- `code-reviewer`
+- `frontend-developer`
+- `backend-architect`
+- `ui-designer`
+- `ux-architect`
+- `expert-react-frontend-engineer`
+
+Use the matching skill name explicitly in a prompt when you want Codex to load that behavior.
+
 ---
 
 **Note:**

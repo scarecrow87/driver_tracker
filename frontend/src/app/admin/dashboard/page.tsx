@@ -41,6 +41,13 @@ interface CheckIn {
   extendedStayReason?: string;
 }
 
+interface CheckInsResponse {
+  data?: CheckIn[];
+  total?: number;
+  page?: number;
+  totalPages?: number;
+}
+
 interface MapPoint {
   id: string;
   driverName: string;
@@ -76,6 +83,11 @@ interface Stats {
 type ActiveTab = 'overview' | 'locations' | 'users' | 'map' | 'history' | 'settings';
 
 const DriverMap = dynamic(() => import('@/components/DriverMap'), { ssr: false });
+
+function getCheckInRows(result: CheckIn[] | CheckInsResponse): CheckIn[] {
+  if (Array.isArray(result)) return result;
+  return Array.isArray(result.data) ? result.data : [];
+}
 
 export default function AdminDashboard() {
   const { user, loading: authLoading, logout } = useSession();
@@ -166,14 +178,18 @@ export default function AdminDashboard() {
 
   async function fetchCheckIns() {
     const res = await fetch('/api/checkins?includeLocation=true&includeDriver=true');
-    if (res.ok) setCheckIns(await res.json());
+    if (res.ok) {
+      const result: CheckIn[] | CheckInsResponse = await res.json();
+      setCheckIns(getCheckInRows(result));
+    }
   }
 
   async function fetchLatestLocations() {
     const res = await fetch('/api/checkins?includeLocation=true&includeDriver=true&latestOnly=true');
     if (!res.ok) return;
 
-    const rows: CheckIn[] = await res.json();
+    const result: CheckIn[] | CheckInsResponse = await res.json();
+    const rows = getCheckInRows(result);
     const points = rows
       .map((ci) => ({
         id: ci.id,
@@ -214,11 +230,11 @@ export default function AdminDashboard() {
 
     const res = await fetch(`/api/checkins?${params}`);
     if (res.ok) {
-      const result = await res.json();
-      setHistoryData(result.data);
-      setHistoryTotal(result.total);
-      setHistoryPage(result.page);
-      setHistoryTotalPages(result.totalPages);
+      const result: CheckInsResponse = await res.json();
+      setHistoryData(getCheckInRows(result));
+      setHistoryTotal(result.total ?? 0);
+      setHistoryPage(result.page ?? page);
+      setHistoryTotalPages(result.totalPages ?? 1);
     }
     setHistoryLoading(false);
   }

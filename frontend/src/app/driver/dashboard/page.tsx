@@ -22,6 +22,15 @@ interface CheckIn {
   extendedStayReason?: string;
 }
 
+interface CheckInsResponse {
+  data?: CheckIn[];
+}
+
+function getCheckInRows(result: CheckIn[] | CheckInsResponse): CheckIn[] {
+  if (Array.isArray(result)) return result;
+  return Array.isArray(result.data) ? result.data : [];
+}
+
 export default function DriverDashboard() {
   const { user, loading: authLoading, logout } = useSession();
   const router = useRouter();
@@ -60,7 +69,10 @@ export default function DriverDashboard() {
 
   async function fetchCheckIns() {
     const res = await fetch('/api/checkins?includeLocation=true');
-    if (res.ok) setCheckIns(await res.json());
+    if (res.ok) {
+      const result: CheckIn[] | CheckInsResponse = await res.json();
+      setCheckIns(getCheckInRows(result));
+    }
   }
 
   async function fetchCurrentCheckIn() {
@@ -190,10 +202,10 @@ export default function DriverDashboard() {
     setMessage('');
 
     try {
-      const res = await fetch('/api/checkout', {
+      const res = await fetch('/api/checkin/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ checkInId: currentCheckIn.id }),
+        body: JSON.stringify({}),
       });
 
       if (res.ok) {
