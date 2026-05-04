@@ -1,9 +1,11 @@
 'use client';
 
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from '@/lib/session';
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { PushNotificationControl } from '@/components/PushNotificationControl';
+import { useRouter } from 'next/navigation';
 
 interface Location {
   id: string;
@@ -57,6 +59,9 @@ interface NotificationSettings {
   twilioAccountSid: string;
   twilioAuthToken: string;
   twilioFromNumber: string;
+  emailAlertsEnabled: boolean;
+  smsAlertsEnabled: boolean;
+  pushAlertsEnabled: boolean;
   hasEmailClientSecret: boolean;
   hasTwilioAuthToken: boolean;
 }
@@ -73,7 +78,8 @@ type ActiveTab = 'overview' | 'locations' | 'users' | 'map' | 'history' | 'setti
 const DriverMap = dynamic(() => import('@/components/DriverMap'), { ssr: false });
 
 export default function AdminDashboard() {
-  const { data: session } = useSession();
+  const { user, loading: authLoading, logout } = useSession();
+  const router = useRouter();
   const [tab, setTab] = useState<ActiveTab>('overview');
   const [stats, setStats] = useState<Stats | null>(null);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
@@ -122,23 +128,36 @@ export default function AdminDashboard() {
     twilioAccountSid: '',
     twilioAuthToken: '',
     twilioFromNumber: '',
+    emailAlertsEnabled: true,
+    smsAlertsEnabled: true,
+    pushAlertsEnabled: true,
     hasEmailClientSecret: false,
     hasTwilioAuthToken: false,
   });
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+    if (user.role === 'DRIVER') {
+      router.replace('/driver/dashboard');
+      return;
+    }
+
     fetchStats();
     fetchCheckIns();
     fetchLatestLocations();
     fetchLocations();
     fetchUsers();
-  }, []);
+  }, [authLoading, router, user]);
 
   useEffect(() => {
-    if (session?.user?.role === 'SUPERUSER') {
+    if (user?.role === 'SUPERUSER') {
       fetchNotificationSettings();
     }
-  }, [session?.user?.role]);
+  }, [user?.role]);
 
   async function fetchStats() {
     const res = await fetch('/api/admin/stats');
@@ -216,6 +235,9 @@ export default function AdminDashboard() {
       emailFrom: data.emailFrom || '',
       twilioAccountSid: data.twilioAccountSid || '',
       twilioFromNumber: data.twilioFromNumber || '',
+      emailAlertsEnabled: data.emailAlertsEnabled ?? true,
+      smsAlertsEnabled: data.smsAlertsEnabled ?? true,
+      pushAlertsEnabled: data.pushAlertsEnabled ?? true,
       hasEmailClientSecret: Boolean(data.hasEmailClientSecret),
       hasTwilioAuthToken: Boolean(data.hasTwilioAuthToken),
       emailClientSecret: '',
@@ -236,6 +258,9 @@ export default function AdminDashboard() {
       twilioAccountSid: notificationSettings.twilioAccountSid,
       twilioAuthToken: notificationSettings.twilioAuthToken,
       twilioFromNumber: notificationSettings.twilioFromNumber,
+      emailAlertsEnabled: notificationSettings.emailAlertsEnabled,
+      smsAlertsEnabled: notificationSettings.smsAlertsEnabled,
+      pushAlertsEnabled: notificationSettings.pushAlertsEnabled,
     };
 
     const res = await fetch('/api/admin/settings/notifications', {
@@ -364,15 +389,19 @@ export default function AdminDashboard() {
     return new Date(dt).toLocaleString();
   }
 
+  if (authLoading || !user || user.role === 'DRIVER') {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
       <header className="bg-blue-700 text-white px-6 py-4 flex justify-between items-center">
         <h1 className="text-xl font-bold">Admin Dashboard</h1>
         <div className="flex items-center gap-4">
-          <span className="text-sm">{session?.user?.name}</span>
+          <span className="text-sm">{user?.name}</span>
           <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
+            onClick={logout}
             className="bg-blue-800 hover:bg-blue-900 px-3 py-1 rounded text-sm"
           >
             Sign Out
@@ -388,7 +417,7 @@ export default function AdminDashboard() {
           'users',
           'map',
           'history',
-          ...(session?.user?.role === 'SUPERUSER' ? (['settings'] as ActiveTab[]) : []),
+          ...(user?.role === 'SUPERUSER' ? (['settings'] as ActiveTab[]) : []),
         ] as ActiveTab[]).map((t) => (
           <button
             key={t}
@@ -723,7 +752,7 @@ export default function AdminDashboard() {
                   >
                     <option value="DRIVER">Driver</option>
                     <option value="ADMIN">Admin</option>
-                    {session?.user?.role === 'SUPERUSER' && (
+                    {user?.role === 'SUPERUSER' && (
                       <option value="SUPERUSER">Superuser</option>
                     )}
                   </select>
@@ -972,10 +1001,25 @@ export default function AdminDashboard() {
         )}
 
         {/* Settings Tab (Superuser only) */}
-        {tab === 'settings' && session?.user?.role === 'SUPERUSER' && (
+        {tab === 'settings' && user?.role === 'SUPERUSER' && (
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="font-semibold text-gray-800 mb-4">Notification Settings</h2>
             <form onSubmit={handleSettingsSubmit} className="space-y-4 max-w-xl">
+              <div className="border-b pb-4 mb-4">
+                <h3 className="font-medium text-gray-800 mb-3">Alert Channels</h3>
+                <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
+                  <input type="checkbox" checked={notificationSettings.emailAlertsEnabled} onChange={(e) => setNotificationSettings({ ...notificationSettings, emailAlertsEnabled: e.target.checked })} />
+                  Email alerts
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 mb-2">
+                  <input type="checkbox" checked={notificationSettings.smsAlertsEnabled} onChange={(e) => setNotificationSettings({ ...notificationSettings, smsAlertsEnabled: e.target.checked })} />
+                  SMS alerts
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={notificationSettings.pushAlertsEnabled} onChange={(e) => setNotificationSettings({ ...notificationSettings, pushAlertsEnabled: e.target.checked })} />
+                  Browser push alerts
+                </label>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email Tenant ID</label>
                 <input type="text" value={notificationSettings.emailTenantId} onChange={(e) => setNotificationSettings({ ...notificationSettings, emailTenantId: e.target.value })} className="w-full border border-gray-300 rounded-md px-3 py-2" />
@@ -1006,6 +1050,10 @@ export default function AdminDashboard() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">From Number</label>
                   <input type="text" value={notificationSettings.twilioFromNumber} onChange={(e) => setNotificationSettings({ ...notificationSettings, twilioFromNumber: e.target.value })} className="w-full border border-gray-300 rounded-md px-3 py-2" />
                 </div>
+              </div>
+              <div className="border-t pt-4 mt-4">
+                <h3 className="font-medium text-gray-800 mb-3">Browser Push</h3>
+                <PushNotificationControl />
               </div>
               <button type="submit" disabled={savingSettings} className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50">
                 {savingSettings ? 'Saving...' : 'Save Settings'}

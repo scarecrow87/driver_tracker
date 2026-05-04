@@ -6,11 +6,11 @@ This document provides a comprehensive reference for all backend API endpoints i
 All API endpoints are prefixed with `/api/`
 
 ## Authentication
-The API uses JWT (JSON Web Token) for authentication. Upon successful login, clients receive a token that must be included in the `Authorization` header of subsequent requests.
+The API uses a backend-issued HTTP-only `driver_tracker_session` cookie for browser authentication. Bearer JWT authentication remains supported for API clients and test scripts.
 
 ### Login
 **POST** `/api/auth/login`
-- Authenticates a user and returns a JWT token
+- Authenticates a user, sets the `driver_tracker_session` cookie, and returns user details
 - **Request Body:**
   ```json
   {
@@ -24,8 +24,7 @@ The API uses JWT (JSON Web Token) for authentication. Upon successful login, cli
     "id": "string",
     "email": "string",
     "name": "string",
-    "role": "string (SUPERUSER|ADMIN|DRIVER)",
-    "token": "string (JWT)"
+    "role": "string (SUPERUSER|ADMIN|DRIVER)"
   }
   ```
 - **Error Responses:**
@@ -34,9 +33,9 @@ The API uses JWT (JSON Web Token) for authentication. Upon successful login, cli
   - 500: Internal server error
 
 ### Get Current User
-**POST** `/api/auth/me`
+**GET** `/api/auth/me`
 - Returns the currently authenticated user's information
-- Requires: Valid JWT token in Authorization header
+- Requires: Valid session cookie or Bearer JWT
 - **Success Response (200):**
   ```json
   {
@@ -52,6 +51,10 @@ The API uses JWT (JSON Web Token) for authentication. Upon successful login, cli
 - **Error Responses:**
   - 401: Not authenticated
   - 500: Internal server error
+
+### Logout
+**POST** `/api/auth/logout`
+- Clears the `driver_tracker_session` cookie
 
 ## Driver Check-in/out
 All check-in/check-out endpoints require authentication.
@@ -499,7 +502,10 @@ These endpoints are designed to receive requests from external services (like Tw
     "emailFrom": "string or null",
     "twilioAccountSid": "string or null",
     "twilioAuthToken": "string or null (masked as '••••••••' if set)",
-    "twilioFromNumber": "string or null"
+    "twilioFromNumber": "string or null",
+    "emailAlertsEnabled": "boolean",
+    "smsAlertsEnabled": "boolean",
+    "pushAlertsEnabled": "boolean"
   }
   ```
 - **Error Responses:**
@@ -517,6 +523,22 @@ These endpoints are designed to receive requests from external services (like Tw
   - 401: Not authenticated
   - 403: Insufficient privileges (requires SUPERUSER)
   - 500: Internal server error
+
+## Browser Push Notifications
+**GET** `/api/push/public-key`
+- Returns the public VAPID key used by browsers to subscribe to push notifications
+
+**POST** `/api/push/subscriptions`
+- Saves or updates the current authenticated user's browser push subscription
+- Requires: Valid session cookie or Bearer JWT
+
+**DELETE** `/api/push/subscriptions`
+- Removes the current authenticated user's browser push subscription for the supplied endpoint
+- Requires: Valid session cookie or Bearer JWT
+
+**POST** `/api/push/test`
+- Sends a test browser push notification to the current authenticated user's saved subscriptions
+- Requires: Valid session cookie or Bearer JWT
 
 ## Error Codes
 The API uses standard HTTP status codes:

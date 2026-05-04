@@ -1,7 +1,8 @@
 'use client';
 
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from '@/lib/session';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface Location {
   id: string;
@@ -22,7 +23,8 @@ interface CheckIn {
 }
 
 export default function DriverDashboard() {
-  const { data: session } = useSession();
+  const { user, loading: authLoading, logout } = useSession();
+  const router = useRouter();
   const [locations, setLocations] = useState<Location[]>([]);
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
   const [currentCheckIn, setCurrentCheckIn] = useState<CheckIn | null>(null);
@@ -36,10 +38,20 @@ export default function DriverDashboard() {
   const [extending, setExtending] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+    if (user.role === 'ADMIN' || user.role === 'SUPERUSER') {
+      router.replace('/admin/dashboard');
+      return;
+    }
+
     fetchLocations();
     fetchCheckIns();
     fetchCurrentCheckIn();
-  }, []);
+  }, [authLoading, router, user]);
 
   async function fetchLocations() {
     const res = await fetch('/api/locations');
@@ -206,15 +218,19 @@ export default function DriverDashboard() {
     return new Date(dt).toLocaleString();
   }
 
+  if (authLoading || !user || user.role !== 'DRIVER') {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
       <header className="bg-blue-700 text-white px-6 py-4 flex justify-between items-center">
         <h1 className="text-xl font-bold">Driver Dashboard</h1>
         <div className="flex items-center gap-4">
-          <span className="text-sm">{session?.user?.name}</span>
+          <span className="text-sm">{user?.name}</span>
           <button
-            onClick={() => signOut({ callbackUrl: '/login' })}
+            onClick={logout}
             className="bg-blue-800 hover:bg-blue-900 px-3 py-1 rounded text-sm"
           >
             Sign Out

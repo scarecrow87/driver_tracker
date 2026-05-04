@@ -1,6 +1,6 @@
 'use client';
 
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from '@/lib/session';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -28,7 +28,7 @@ interface CheckInRecord {
 }
 
 export default function DriverHistoryPage() {
-  const { data: session } = useSession();
+  const { user, loading: authLoading, logout } = useSession();
   const params = useParams();
   const router = useRouter();
   const driverId = params.id as string;
@@ -109,7 +109,7 @@ export default function DriverHistoryPage() {
   const completedCount = historyData.filter((ci) => ci.checkOutTime).length;
   const activeCount = historyData.filter((ci) => !ci.checkOutTime).length;
 
-  if (!session || session.user.role === 'DRIVER') {
+  if (authLoading || !user || user.role === 'DRIVER') {
     return null;
   }
 
@@ -121,8 +121,8 @@ export default function DriverHistoryPage() {
           <h1 className="text-xl font-bold">{driver ? driver.name : 'Driver'} — History</h1>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm">{session?.user?.name}</span>
-          <button onClick={() => signOut({ callbackUrl: '/login' })} className="bg-blue-800 hover:bg-blue-900 px-3 py-1 rounded text-sm">Sign Out</button>
+          <span className="text-sm">{user?.name}</span>
+          <button onClick={logout} className="bg-blue-800 hover:bg-blue-900 px-3 py-1 rounded text-sm">Sign Out</button>
         </div>
       </header>
 

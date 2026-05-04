@@ -1,0 +1,16 @@
+
+> driver-tracker-frontend@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env
+
+ ✓ Starting...
+> [PWA] PWA support is disabled
+> [PWA] PWA support is disabled
+ ✓ Ready in 1982ms
+ ○ Compiling /login ...
+ ✓ Compiled /login in 1263ms (552 modules)
+ GET /login 200 in 1488ms
+[?25h

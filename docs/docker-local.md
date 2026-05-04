@@ -83,7 +83,7 @@ nano .env   # or your preferred editor
 |----------|-------------|---------|
 | `DATABASE_URL` | PostgreSQL connection string. If you let Compose start a DB, use the service name `db`. | `postgresql://postgres:password@db:5432/driver_tracker` |
 | `NEXTAUTH_SECRET` | Random string used for JWT signing. | `$(openssl rand -base64 32)` |
-| `NEXTAUTH_URL` | Base URL of the app (used for auth callbacks). | `http://localhost:3000` (or your domain) |
+| `AUTH_COOKIE_SECURE` | Set `false` for local HTTP testing and `true` when served over HTTPS. | `false` |
 | `SETTINGS_ENCRYPTION_KEY` | 32‑byte key (raw or base64) for encrypting provider secrets. | `$(openssl rand -base64 32)` |
 | `AUTO_SEED_ON_EMPTY_DB` | Set `true` to seed default users/locations on first start. | `true` |
 | `MIGRATION_MAX_RETRIES` | Docker startup retry count for migrations (default `10`). | `10` |

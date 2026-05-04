@@ -12,6 +12,17 @@ const nextConfig = {
   env: {
     API_URL: process.env.NEXT_PUBLIC_API_URL,
   },
+  async rewrites() {
+    const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL;
+    if (!apiUrl) return [];
+
+    return [
+      {
+        source: '/api/:path*',
+        destination: `${apiUrl}/:path*`,
+      },
+    ];
+  },
 };
 
 module.exports = withPWA(nextConfig);

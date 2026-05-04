@@ -5,8 +5,8 @@ Frontend-only deployment for Driver Tracker PWA. This project is split from the 
 ## Architecture
 
 - **Frontend**: Next.js 14 (standalone output) - serves UI only
-- **Backend**: Separate API server at `https://api.pelz-dt.shellshock.net.au`
-- **Authentication**: NextAuth.js with session cookies
+- **Backend**: Proxied under the same public origin at `/api`
+- **Authentication**: Backend-issued HTTP-only session cookie
 
 ## Setup
 
@@ -26,9 +26,8 @@ cp .env.example .env
 Edit `.env` with your values:
 
 ```bash
-NEXTAUTH_URL=https://api.pelz-dt.shellshock.net.au
-NEXTAUTH_SECRET=<same-secret-as-backend>
-NEXT_PUBLIC_API_URL=https://api.pelz-dt.shellshock.net.au/api
+NEXT_PUBLIC_API_URL=https://driver-tracker.example.com/api
+INTERNAL_API_URL=http://backend-host:3001/api
 ```
 
 3. **Build**
@@ -68,20 +67,19 @@ See `docs/nginx-frontend-config.md` for sample nginx configuration.
 
 | Variable | Description |
 |----------|-------------|
-| `NEXTAUTH_URL` | Backend API URL for auth |
-| `NEXTAUTH_SECRET` | Session secret (must match backend) |
 | `NEXT_PUBLIC_API_URL` | Backend API base URL |
+| `INTERNAL_API_URL` | Server-side backend API base URL for rewrites |
 
 ## API Calls
 
 All API calls are proxied to the backend server. The frontend uses `src/lib/api.ts` for fetching data.
 
-## CORS
+## PWA Notifications
 
-The backend must allow CORS from the frontend domain (`https://pelz-dt.shellshock.net.au`).
+Browser push requires HTTPS outside localhost. Configure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` on the backend, then enable browser push for the current device from the superuser notification settings page.
 
 ## Troubleshooting
 
-- **Login fails**: Ensure `NEXTAUTH_SECRET` matches backend
+- **Login fails**: Ensure nginx proxies `/api/*` to the backend and backend `NEXTAUTH_SECRET` is set
 - **API errors**: Check `NEXT_PUBLIC_API_URL` is correct
 - **Session not persisting**: Verify cookies are allowed

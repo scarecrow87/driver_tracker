@@ -114,7 +114,7 @@ DATABASE_URL="postgresql://$POSTGRES_ADMIN:$POSTGRES_PASSWORD@$POSTGRES_NAME.pos
 # Generate other secrets
 NEXTAUTH_SECRET=$(openssl rand -base64 32)
 SETTINGS_ENCRYPTION_KEY=$(openssl rand -base64 32)
-NEXTAUTH_URL="https://$APP_SERVICE_NAME.azurewebsites.net"
+AUTH_COOKIE_SECURE="true"
 
 # Apply to App Service
 az webapp config appsettings set \
@@ -122,7 +122,7 @@ az webapp config appsettings set \
   --resource-group $RESOURCE_GROUP \
   --settings DATABASE_URL="$DATABASE_URL" \
             NEXTAUTH_SECRET="$NEXTAUTH_SECRET" \
-            NEXTAUTH_URL="$NEXTAUTH_URL" \
+            AUTH_COOKIE_SECURE="$AUTH_COOKIE_SECURE" \
             SETTINGS_ENCRYPTION_KEY="$SETTINGS_ENCRYPTION_KEY" \
             AUTO_SEED_ON_EMPTY_DB=true \
             MIGRATION_MAX_RETRIES=10 \

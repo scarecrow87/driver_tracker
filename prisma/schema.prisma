@@ -9,7 +9,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum Role {
@@ -37,7 +36,9 @@ model User {
   adminSmsOptOutTier3        Boolean @default(false)
   // ---
   updatedNotificationSettings NotificationSettings[] @relation("NotificationSettingsUpdatedBy")
+  pushSubscriptions PushSubscription[]
   checkIns     CheckIn[]
+  initiatedSmsAuditLogs SmsAuditLog[] @relation("InitiatedSmsAuditLog")
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
@@ -51,11 +52,28 @@ model NotificationSettings {
   twilioAccountSid       String?
   twilioAuthTokenEnc     String?
   twilioFromNumber       String?
+  emailAlertsEnabled     Boolean  @default(true)
+  smsAlertsEnabled       Boolean  @default(true)
+  pushAlertsEnabled      Boolean  @default(true)
   inboundSmsEnabled      Boolean  @default(false) // Superuser can enable/disable inbound SMS
   updatedBy              User?    @relation("NotificationSettingsUpdatedBy", fields: [updatedById], references: [id])
   updatedById            String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model SmsAuditLog {
@@ -64,7 +82,9 @@ model SmsAuditLog {
   messageBody      String   @db.Text
   triggerType      String   // "admin-alert", "driver-checkin-confirm", "driver-checkout-confirm", "manual-trigger", "inbound-checkin", "inbound-checkout"
   checkInId        String?
+  checkIn          CheckIn? @relation(fields: [checkInId], references: [id])
   initiatedByUserId String?
+  initiatedBy      User?    @relation("InitiatedSmsAuditLog", fields: [initiatedByUserId], references: [id])
   twilioSid        String?
   twilioStatus     String   @default("queued")
   error            String?
@@ -101,6 +121,7 @@ model CheckIn {
   isExtendedStay     Boolean   @default(false)
   extendedStayReason String?
   extendedStayAt     DateTime?
+  smsAuditLogs SmsAuditLog[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }

@@ -1,0 +1,75 @@
+
+> driver-tracker-backend@0.1.0 start
+> node dist/server.js
+
+[Cron] Starting check-in alert cron job...
+[Cron] Cron job scheduled (every 15 minutes).
+Backend server running on port 3001
+[0mPOST /api/auth/login [32m200[0m 229.733 ms - 355[0m
+[0mPOST /api/auth/login [32m200[0m 88.536 ms - 355[0m
+[0mGET /api/admin/stats [32m200[0m 23.383 ms - 74[0m
+[0mPOST /api/auth/login [32m200[0m 99.750 ms - 343[0m
+prisma:error 
+Invalid `prisma_1.prisma.checkIn.findFirst()` invocation in
+/home/brendan/projects/driver_tracker/backend/dist/routes/checkinRoutes.js:22:67
+
+  19     return res.status(400).json({ error: 'Location ID is required' });
+  20 }
+  21 // Check for existing open check-in
+→ 22 const existingOpenCheckin = await prisma_1.prisma.checkIn.findFirst(
+The column `CheckIn.alertLevel` does not exist in the current database.
+Checkin error: PrismaClientKnownRequestError: 
+Invalid `prisma_1.prisma.checkIn.findFirst()` invocation in
+/home/brendan/projects/driver_tracker/backend/dist/routes/checkinRoutes.js:22:67
+
+  19     return res.status(400).json({ error: 'Location ID is required' });
+  20 }
+  21 // Check for existing open check-in
+→ 22 const existingOpenCheckin = await prisma_1.prisma.checkIn.findFirst(
+The column `CheckIn.alertLevel` does not exist in the current database.
+    at zr.handleRequestError (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/client/runtime/client.js:65:8286)
+    at zr.handleAndLogRequestError (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/client/runtime/client.js:65:7581)
+    at zr.request (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/client/runtime/client.js:65:7288)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async a (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/client/runtime/client.js:75:6862)
+    at async /home/brendan/projects/driver_tracker/backend/dist/routes/checkinRoutes.js:22:37 {
+  code: 'P2022',
+  meta: {
+    modelName: 'CheckIn',
+    driverAdapterError: DriverAdapterError: ColumnNotFound
+        at PrismaPgAdapter.onError (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/adapter-pg/dist/index.js:678:11)
+        at PrismaPgAdapter.performIO (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/adapter-pg/dist/index.js:673:12)
+        at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+        at async PrismaPgAdapter.queryRaw (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/adapter-pg/dist/index.js:604:30)
+        at async e.interpretNode (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/client/runtime/client.js:11:44621)
+        at async e.interpretNode (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/client/runtime/client.js:11:45065)
+        at async e.interpretNode (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/client/runtime/client.js:11:46285)
+        at async e.run (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/client/runtime/client.js:11:43335)
+        at async e.execute (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/client/runtime/client.js:57:815)
+        at async jt.request (/home/brendan/projects/driver_tracker/backend/node_modules/@prisma/client/runtime/client.js:58:2401) {
+      cause: [Object]
+    }
+  },
+  clientVersion: '7.8.0'
+}
+[0mPOST /api/checkin [31m500[0m 17.599 ms - 33[0m
+[0mPOST /api/auth/login [32m200[0m 103.813 ms - 343[0m
+[0mPOST /api/checkin [32m201[0m 33.214 ms - 647[0m
+[0mPOST /api/auth/login [32m200[0m 97.684 ms - 343[0m
+[0mPOST /api/checkin/checkout [32m200[0m 22.011 ms - 669[0m
+[0mPOST /api/auth/login [32m200[0m 90.238 ms - 355[0m
+[0mGET /api/admin/users?page=1&limit=10 [32m200[0m 5.249 ms - 630[0m
+[Cron] Checking for overdue check-ins...
+[Cron] Tier 0: no check-ins to escalate.
+[Cron] Tier 1: no check-ins to escalate.
+[Cron] Tier 2: no check-ins to escalate.
+[Cron] Extended Tier 0: no check-ins to escalate.
+[Cron] Extended Tier 1: no check-ins to escalate.
+[Cron] Extended Tier 2: no check-ins to escalate.
+[Cron] Checking for overdue check-ins...
+[Cron] Tier 0: no check-ins to escalate.
+[Cron] Tier 1: no check-ins to escalate.
+[Cron] Tier 2: no check-ins to escalate.
+[Cron] Extended Tier 0: no check-ins to escalate.
+[Cron] Extended Tier 1: no check-ins to escalate.
+[Cron] Extended Tier 2: no check-ins to escalate.

@@ -1,130 +1,45 @@
-# Nginx Configuration for Frontend Server
+# Nginx Frontend Server Setup
 
-This configuration serves the Driver Tracker frontend and proxies API calls to the backend.
+Use this when the frontend runs on a separate host but should expose one public HTTPS origin for the PWA and API.
 
-## Prerequisites
+## Target Architecture
 
-- Nginx installed
-- SSL certificate (handled by Cloudflare, so nginx can use HTTP)
+- Public app URL: `https://driver-tracker.example.com`
+- Frontend server: Next.js standalone on `127.0.0.1:3000`
+- Backend API: reachable from nginx at `http://<backend-host>:3001`
+- Browser sees one origin: nginx serves the frontend and proxies `/api/*` to the backend
 
-## Configuration
+This keeps the backend-issued HTTP-only auth cookie same-origin and avoids CORS for normal app traffic.
 
-Create `/etc/nginx/sites-available/driver-tracker-frontend`:
+## Build Environment
 
-```nginx
-server {
-    listen 80;
-    server_name pelz-dt.shellshock.net.au;
-
-    root /var/www/driver-tracker-frontend/.next/standalone;
-    index index.html;
-
-    # Gzip compression
-    gzip on;
-    gzip_vary on;
-    gzip_min_length 1024;
-    gzip_proxied any;
-    gzip_types text/plain text/css text/xml text/javascript application/javascript application/json application/xml;
-
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-
-    # Cache static assets
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # Serve Next.js static files
-    location /_next/static/ {
-        alias /var/www/driver-tracker-frontend/.next/static/;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-
-    # Serve public assets
-    location /icons/ {
-        alias /var/www/driver-tracker-frontend/public/icons/;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location /manifest.json {
-        alias /var/www/driver-tracker-frontend/public/manifest.json;
-    }
-
-    # Main application
-    location / {
-        try_files $uri $uri/ /index.html;
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-
-    # Proxy API calls to backend (Traefik)
-    location /api/ {
-        proxy_pass https://api.pelz-dt.shellshock.net.au/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-
-    # Proxy auth requests
-    location /api/auth/ {
-        proxy_pass https://api.pelz-dt.shellshock.net.au/api/auth/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-## Deployment Steps
-
-1. **Copy configuration**
+Create `frontend/.env.production` before building:
 
 ```bash
-sudo cp nginx-frontend-config.conf /etc/nginx/sites-available/driver-tracker-frontend
-sudo ln -s /etc/nginx/sites-available/driver-tracker-frontend /etc/nginx/sites-enabled/
+NEXT_PUBLIC_API_URL=https://driver-tracker.example.com/api
+INTERNAL_API_URL=http://<backend-host>:3001/api
 ```
 
-2. **Test configuration**
+Build locally or on the frontend server:
 
 ```bash
-sudo nginx -t
+cd frontend
+npm ci
+npm run build
 ```
 
-3. **Reload nginx**
+Copy the standalone output:
 
 ```bash
-sudo systemctl reload nginx
+sudo mkdir -p /var/www/driver-tracker-frontend/.next
+sudo rsync -a .next/standalone/ /var/www/driver-tracker-frontend/
+sudo rsync -a .next/static/ /var/www/driver-tracker-frontend/.next/static/
+sudo rsync -a public/ /var/www/driver-tracker-frontend/public/
 ```
 
-4. **Deploy frontend**
+## Systemd Service
 
-```bash
-# Copy standalone output
-scp -r .next/standalone/* user@frontend-server:/var/www/driver-tracker-frontend/
-scp -r .next/static user@frontend-server:/var/www/driver-tracker-frontend/.next/
-scp -r public/* user@frontend-server:/var/www/driver-tracker-frontend/public/
-```
-
-5. **Start frontend service**
-
-Create systemd service at `/etc/systemd/system/driver-tracker-frontend.service`:
+Create `/etc/systemd/system/driver-tracker-frontend.service`:
 
 ```ini
 [Unit]
@@ -138,48 +53,127 @@ WorkingDirectory=/var/www/driver-tracker-frontend
 ExecStart=/usr/bin/node server.js
 Restart=always
 Environment=NODE_ENV=production
-Environment=NEXTAUTH_URL=https://api.pelz-dt.shellshock.net.au
-Environment=NEXTAUTH_SECRET=<your-secret>
-Environment=NEXT_PUBLIC_API_URL=https://api.pelz-dt.shellshock.net.au/api
+Environment=PORT=3000
+Environment=NEXT_PUBLIC_API_URL=https://driver-tracker.example.com/api
+Environment=INTERNAL_API_URL=http://<backend-host>:3001/api
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-```bash
-sudo systemctl enable driver-tracker-frontend
-sudo systemctl start driver-tracker-frontend
-```
-
-## Cloudflare Setup
-
-1. Add DNS record for `pelz-dt.shellshock.net.au` → frontend server IP (proxied)
-2. Add DNS record for `api.pelz-dt.shellshock.net.au` → backend server IP (proxied)
-3. Set SSL/TLS mode to "Full" or "Full (Strict)"
-
-## Backend CORS Configuration
-
-The backend must allow CORS from the frontend domain. Add to backend `.env`:
+Start it:
 
 ```bash
-CORS_ORIGIN=https://pelz-dt.shellshock.net.au
+sudo systemctl daemon-reload
+sudo systemctl enable --now driver-tracker-frontend
 ```
 
-## Testing
+## Nginx Site
+
+Create `/etc/nginx/sites-available/driver-tracker-frontend`:
+
+```nginx
+server {
+    listen 80;
+    server_name driver-tracker.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name driver-tracker.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/driver-tracker.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/driver-tracker.example.com/privkey.pem;
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/javascript application/json application/manifest+json;
+
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+
+    location /_next/static/ {
+        alias /var/www/driver-tracker-frontend/.next/static/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location /icons/ {
+        alias /var/www/driver-tracker-frontend/public/icons/;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location = /manifest.json {
+        alias /var/www/driver-tracker-frontend/public/manifest.json;
+        add_header Cache-Control "no-cache";
+    }
+
+    location ~ ^/(sw\.js|workbox-[^/]+\.js|worker-[^/]+\.js)$ {
+        alias /var/www/driver-tracker-frontend/public/$1;
+        add_header Cache-Control "no-cache";
+    }
+
+    location /api/ {
+        proxy_pass http://<backend-host>:3001/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+Enable and reload:
 
 ```bash
-# Check nginx is running
-curl -I http://localhost
-
-# Check frontend loads
-curl -I https://pelz-dt.shellshock.net.au
-
-# Check API proxy works
-curl -I https://pelz-dt.shellshock.net.au/api/health
+sudo ln -s /etc/nginx/sites-available/driver-tracker-frontend /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
-## Troubleshooting
+## Backend Environment
 
-- **502 Bad Gateway**: Check frontend service is running (`systemctl status driver-tracker-frontend`)
-- **API calls fail**: Verify backend URL is correct and accessible
-- **Session issues**: Ensure `NEXTAUTH_SECRET` matches on both servers
+Set these on the backend service:
+
+```bash
+NEXTAUTH_SECRET=<shared-jwt-secret>
+AUTH_COOKIE_SECURE=true
+CORS_ORIGIN=https://driver-tracker.example.com
+VAPID_PUBLIC_KEY=<web-push-public-key>
+VAPID_PRIVATE_KEY=<web-push-private-key>
+VAPID_SUBJECT=mailto:admin@example.com
+```
+
+Generate VAPID keys with:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+## Verification
+
+```bash
+curl -I https://driver-tracker.example.com
+curl -I https://driver-tracker.example.com/manifest.json
+curl -I https://driver-tracker.example.com/sw.js
+curl -i -X POST https://driver-tracker.example.com/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"driver@example.com","password":"driver123"}'
+```
+
+The login response should include `Set-Cookie: driver_tracker_session=...`.

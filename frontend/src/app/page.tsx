@@ -1,17 +1,23 @@
-import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+'use client';
 
-export default async function HomePage() {
-  const session = await getServerSession(authOptions);
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useSession } from '@/lib/session';
 
-  if (!session) {
-    redirect('/login');
-  }
+export default function HomePage() {
+  const router = useRouter();
+  const { user, loading } = useSession();
 
-  if (session.user.role === 'ADMIN' || session.user.role === 'SUPERUSER') {
-    redirect('/admin/dashboard');
-  }
+  useEffect(() => {
+    if (loading) return;
 
-  redirect('/driver/dashboard');
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+
+    router.replace(user.role === 'DRIVER' ? '/driver/dashboard' : '/admin/dashboard');
+  }, [loading, router, user]);
+
+  return null;
 }

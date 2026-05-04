@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 
 // Extend Express Request type to include session
 interface SessionRequest extends Request {
-  session?: any;
+  session: any;
 }
 import { prisma } from '../lib/prisma';
 import { geocodeAddress } from '../lib/geocode';

@@ -30,8 +30,9 @@ In Coolify, go to **Servers → [your server] → Resources → Environment Vari
 |----------|-------------|---------|
 | `DATABASE_URL` | PostgreSQL connection string. If using Coolify’s PostgreSQL resource, use the internal host. | `postgresql://postgres:coolifypassword@coolify-postgres:5432/postgres` |
 | `NEXTAUTH_SECRET` | Random string for JWT signing. | `$(openssl rand -base64 32)` |
-| `NEXTAUTH_URL` | Public URL of the app (used for Auth callbacks). | `https://driver-tracker-backend.yourdomain.com` |
+| `AUTH_COOKIE_SECURE` | Set `true` when the app is served over HTTPS. Use `false` for local HTTP testing. | `true` |
 | `SETTINGS_ENCRYPTION_KEY` | 32‑byte key (raw or base64) for encrypting provider secrets. | `$(openssl rand -base64 32)` |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Browser push notification keys and contact subject. Generate with `npx web-push generate-vapid-keys`. | `mailto:admin@example.com` |
 | `AUTO_SEED_ON_EMPTY_DB` | Set `true` to seed default users/locations on first start. | `true` |
 | `MIGRATION_MAX_RETRIES` | Docker startup retry count for migrations (default `10`). | `10` |
 | `MIGRATION_RETRY_DELAY_SECONDS` | Delay between retries (default `5`). | `5` |
@@ -72,13 +73,14 @@ The repository must be accessible by the Coolify server (public or with a deploy
   - Database migration (`prisma migrate deploy`).
   - Seeding (if `AUTO_SEED_ON_EMPTY_DB=true` and the DB is empty).
   - Node.js startup (`node dist/server.js`) and the message `Server running on port 3001`.
-- Once the logs indicate the app is ready, visit the URL you set in `NEXTAUTH_URL` (or the server’s IP with port 3001 if not using a reverse proxy) and append `/api/locations` to test the API (requires authentication).
+- Once the logs indicate the app is ready, verify `/api/auth/login` through the public frontend URL or the backend URL exposed by Coolify.
 
 ### 7. Live testing
 - **API testing**: Use curl or Postman to test the endpoints (see the API reference for details).
 - **Admin flow**: Log in as an admin (default credentials from the seed: `admin@example.com` / `admin123`) via the frontend (deployed separately) or test the admin endpoints directly via API.
 - **SMS/Twilio**: If configured, test inbound/outbound SMS (use Twilio test credentials or real ones for live tests).
 - **Notifications**: Trigger events that send emails/SMS and verify delivery.
+- **Browser push**: Enable notifications from the superuser settings page, send a test push, then trigger an overdue check-in alert.
 
 ### 8. Monitoring, backups, and rollback
 - **Health checks**: Coolify provides built‑in health checks (you can add a simple `/api/health` route if desired).
