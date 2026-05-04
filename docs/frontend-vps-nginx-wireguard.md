@@ -2,6 +2,8 @@
 
 Use this when the frontend runs on a plain VPS with only nginx, and the backend is reached over a WireGuard private network.
 
+If you are deploying onto an existing multi-domain VPS (nginx `conf.d` style), use `docs/frontend-vps-nginx-multidomain.md` instead.
+
 ## Summary
 
 - Public browser origin: `https://<frontend-host>`
@@ -72,7 +74,7 @@ sudo systemctl enable --now driver-tracker-frontend
 
 ## nginx
 
-Use the host nginx config in [frontend/docs/nginx-frontend-config.md](/home/brendan/projects/driver_tracker/frontend/docs/nginx-frontend-config.md) for the VPS site block.
+Use the host nginx config in `frontend/docs/nginx-frontend-config.md` for the VPS site block.
 
 The important part is:
 

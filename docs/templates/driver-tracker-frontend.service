@@ -1,0 +1,31 @@
+[Unit]
+Description=Driver Tracker Frontend (Next.js standalone)
+After=network.target
+
+[Service]
+Type=simple
+
+# Use the same user/group as your existing nginx vhosts (common: nginx or www-data).
+User=nginx
+Group=nginx
+
+# Runtime directory that contains `server.js`, `public/`, and `.next/`.
+WorkingDirectory=/var/www/<driver-tracker-domain>/app
+
+Environment=NODE_ENV=production
+Environment=HOSTNAME=127.0.0.1
+Environment=PORT=3000
+
+# Browser-facing API origin (same-origin via nginx).
+Environment=NEXT_PUBLIC_API_URL=https://<driver-tracker-domain>/api
+
+# Server-side rewrite target (nginx or Node will call this). Can be public or private.
+Environment=INTERNAL_API_URL=https://<backend-host>/api
+
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+

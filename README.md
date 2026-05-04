@@ -97,6 +97,10 @@ You can test the backend API directly using curl:
 - **Frontend**: Deploy `frontend/` to a VPS with nginx and a local Node.js standalone process. See [frontend/README.md](frontend/README.md).
 - **Backend**: Deploy `backend/` as a standalone Node.js API (Docker recommended). See [backend/README.md](backend/README.md).
 
+Additional frontend deployment notes:
+- Multi-domain VPS: `docs/frontend-vps-nginx-multidomain.md`
+- VPS + WireGuard backend: `docs/frontend-vps-nginx-wireguard.md`
+
 ---
 
 ## Project Structure
